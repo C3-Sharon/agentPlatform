@@ -1,29 +1,32 @@
 package com.sharon.agentplatform.skill.builtin;
 
+import com.sharon.agentplatform.mcp.core.McpClient;
+import com.sharon.agentplatform.mcp.core.McpToolResult;
 import com.sharon.agentplatform.skill.core.Skill;
 import com.sharon.agentplatform.skill.core.SkillContext;
 import com.sharon.agentplatform.skill.core.SkillMetadata;
 import com.sharon.agentplatform.skill.core.SkillResult;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
 @Component
 public class FileSearchSkill implements Skill {
 
-    private static final Path ROOT_DIR = Path.of("workspace").toAbsolutePath().normalize();
+    private final McpClient mcpClient;
+
+    public FileSearchSkill(McpClient mcpClient) {
+        this.mcpClient = mcpClient;
+    }
 
     @Override
     public SkillMetadata metadata() {
         return new SkillMetadata(
                 "file_search",
                 "文件搜索",
-                "在指定目录中搜索文件名。当前版本限制在 workspace 目录下。",
-                "1.0.0",
+                "通过 MCP 文件系统工具在 workspace 目录中搜索文件名",
+                "1.1.0",
                 Map.of(
                         "type", "object",
                         "properties", Map.of(
@@ -34,7 +37,7 @@ public class FileSearchSkill implements Skill {
                         ),
                         "required", List.of("keyword")
                 ),
-                List.of()
+                List.of("mcp:file-system")
         );
     }
 
@@ -46,28 +49,19 @@ public class FileSearchSkill implements Skill {
             return SkillResult.fail("Missing required parameter: keyword");
         }
 
-        try {
-            ensureWorkspaceExists();
+        McpToolResult mcpResult = mcpClient.callTool(
+                "searchFiles",
+                Map.of("keyword", keyword)
+        );
 
-            List<String> matchedFiles = Files.walk(ROOT_DIR)
-                    .filter(Files::isRegularFile)
-                    .filter(path -> path.getFileName().toString().contains(keyword))
-                    .map(path -> ROOT_DIR.relativize(path).toString())
-                    .toList();
-
-            return SkillResult.success(Map.of(
-                    "rootDir", ROOT_DIR.toString(),
-                    "keyword", keyword,
-                    "files", matchedFiles
-            ));
-        } catch (IOException e) {
-            return SkillResult.fail("File search failed: " + e.getMessage());
+        if (!mcpResult.isSuccess()) {
+            return SkillResult.fail(mcpResult.getErrorMessage());
         }
-    }
 
-    private void ensureWorkspaceExists() throws IOException {
-        if (!Files.exists(ROOT_DIR)) {
-            Files.createDirectories(ROOT_DIR);
-        }
+        return SkillResult.success(Map.of(
+                "mcpTool", "searchFiles",
+                "keyword", keyword,
+                "result", mcpResult.getContent()
+        ));
     }
 }

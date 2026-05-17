@@ -1,0 +1,34 @@
+# Maven
+target/
+*.class
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# VS Code
+.vscode/
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Runtime data
+data/
+workspace/
+
+# Environment / secrets
+.env
+*.env
+application-local.yml
+application-dev.yml
+
+# Node frontend, later
+node_modules/
+dist/

@@ -1,0 +1,13 @@
+package com.sharon.agentplatform;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class AgentPlatformApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(AgentPlatformApplication.class, args);
+    }
+
+}

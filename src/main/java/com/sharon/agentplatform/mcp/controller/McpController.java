@@ -28,6 +28,10 @@ public class McpController {
     public ApiResponse<McpToolResult> callTool(
             @RequestBody McpToolCallRequest request
     ) {
+        if (request == null || request.getToolName() == null || request.getToolName().isBlank()) {
+            return ApiResponse.fail("Missing required argument: toolName");
+        }
+
         McpToolResult result = mcpClient.callTool(
                 request.getToolName(),
                 request.getArguments()

@@ -3,6 +3,7 @@ package com.sharon.agentplatform.agent.core;
 import com.sharon.agentplatform.agent.service.LlmSkillDecisionService;
 import com.sharon.agentplatform.agent.dto.ChatRequest;
 import com.sharon.agentplatform.agent.dto.ChatResponse;
+import com.sharon.agentplatform.common.exception.ModelCallException;
 import com.sharon.agentplatform.memory.core.ChatMessage;
 import com.sharon.agentplatform.memory.core.LongTermMemory;
 import com.sharon.agentplatform.memory.service.MemoryService;
@@ -541,26 +542,49 @@ public class AgentRuntime {
 
         long modelStart = System.currentTimeMillis();
 
-        String answer = modelService.chatWithContext(modelId,systemPrompt, userPrompt);
+        try {
+            String answer = modelService.chatWithContext(modelId,systemPrompt, userPrompt);
 
-        long modelDurationMs = System.currentTimeMillis() - modelStart;
+            long modelDurationMs = System.currentTimeMillis() - modelStart;
 
-        trace.add(AgentTrace.withDuration(
-                AgentStep.GENERATE_ANSWER,
-                AgentTraceStatus.SUCCESS,
-                "使用 Spring AI 根据 Skill 结果生成最终回答",
-                Map.of(
-                        "modelId", modelId,
-                        "skillName", skillName,
-                        "params", params,
-                        "skillSuccess", skillResult.isSuccess(),
-                        "shortTermMemoryCount", shortTermMessages.size(),
-                        "longTermMemoryCount", longTermMemories.size()
-                ),
-                modelDurationMs
-        ));
+            trace.add(AgentTrace.withDuration(
+                    AgentStep.GENERATE_ANSWER,
+                    AgentTraceStatus.SUCCESS,
+                    "使用 Spring AI 根据 Skill 结果生成最终回答",
+                    Map.of(
+                            "modelId", modelId,
+                            "skillName", skillName,
+                            "params", params,
+                            "skillSuccess", skillResult.isSuccess(),
+                            "shortTermMemoryCount", shortTermMessages.size(),
+                            "longTermMemoryCount", longTermMemories.size()
+                    ),
+                    modelDurationMs
+            ));
 
-        return answer;
+            return answer;
+        } catch (ModelCallException exception) {
+            long modelDurationMs = System.currentTimeMillis() - modelStart;
+
+            trace.add(AgentTrace.withDuration(
+                    AgentStep.GENERATE_ANSWER,
+                    AgentTraceStatus.FAILED,
+                    "模型总结 SkillResult 失败",
+                    Map.of(
+                            "modelId", modelId,
+                            "skillName", skillName,
+                            "params", params,
+                            "skillSuccess", skillResult.isSuccess(),
+                            "errorMessage", exception.getMessage() == null ? "" : exception.getMessage()
+                    ),
+                    modelDurationMs
+            ));
+
+            if (skillResult.isSuccess()) {
+                return "工具调用成功，原始结果：" + skillResult.getResult();
+            }
+            return "工具调用失败：" + skillResult.getErrorMessage();
+        }
     }
     private String buildSkillSummarySystemPrompt(
             List<ChatMessage> shortTermMessages,
@@ -745,22 +769,41 @@ public class AgentRuntime {
 
         long modelStart = System.currentTimeMillis();
 
-        String answer = modelService.chatWithContext(modelId, systemPrompt, message);
+        try {
+            String answer = modelService.chatWithContext(modelId, systemPrompt, message);
 
-        long modelDurationMs = System.currentTimeMillis() - modelStart;
+            long modelDurationMs = System.currentTimeMillis() - modelStart;
 
-        trace.add(AgentTrace.withDuration(
-                AgentStep.GENERATE_ANSWER,
-                AgentTraceStatus.SUCCESS,
-                "未调用 Skill，使用 Spring AI 生成普通回答",
-                Map.of(
-                        "modelId", modelId,
-                        "shortTermMemoryCount", shortTermMessages.size(),
-                        "longTermMemoryCount", longTermMemories.size()
-                ),
-                modelDurationMs
-        ));
+            trace.add(AgentTrace.withDuration(
+                    AgentStep.GENERATE_ANSWER,
+                    AgentTraceStatus.SUCCESS,
+                    "未调用 Skill，使用 Spring AI 生成普通回答",
+                    Map.of(
+                            "modelId", modelId,
+                            "shortTermMemoryCount", shortTermMessages.size(),
+                            "longTermMemoryCount", longTermMemories.size()
+                    ),
+                    modelDurationMs
+            ));
 
-        return answer;
+            return answer;
+        } catch (ModelCallException exception) {
+            long modelDurationMs = System.currentTimeMillis() - modelStart;
+
+            trace.add(AgentTrace.withDuration(
+                    AgentStep.GENERATE_ANSWER,
+                    AgentTraceStatus.FAILED,
+                    "普通问题模型调用失败",
+                    Map.of(
+                            "modelId", modelId,
+                            "shortTermMemoryCount", shortTermMessages.size(),
+                            "longTermMemoryCount", longTermMemories.size(),
+                            "errorMessage", exception.getMessage() == null ? "" : exception.getMessage()
+                    ),
+                    modelDurationMs
+            ));
+
+            return "模型调用失败，当前无法生成智能回答，请稍后重试。";
+        }
     }
 }

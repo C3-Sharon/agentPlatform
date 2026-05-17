@@ -1,5 +1,6 @@
 package com.sharon.agentplatform.model.service;
 
+import com.sharon.agentplatform.common.exception.ModelCallException;
 import com.sharon.agentplatform.model.core.ModelRouter;
 import org.springframework.stereotype.Service;
 
@@ -28,6 +29,10 @@ public class ModelService {
             return "请输入有效的问题。";
         }
 
-        return modelRouter.chat(modelId, systemPrompt, userMessage);
+        try {
+            return modelRouter.chat(modelId, systemPrompt, userMessage);
+        } catch (Exception exception) {
+            throw new ModelCallException("Model call failed for modelId: " + modelId, exception);
+        }
     }
 }

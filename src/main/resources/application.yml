@@ -7,7 +7,35 @@ server:
       force: true
 
 spring:
+  datasource:
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/agent_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:}
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
   ai:
+    chat:
+      client:
+        enabled: false
+
+    model:
+      chat: none
+      embedding: none
+      image: none
+      moderation: nome
+      audio:
+        speech: none
+        transcription: none
+
     openai:
       api-key: ${OPENAI_API_KEY:}
       base-url: https://api.siliconflow.cn
@@ -15,27 +43,3 @@ spring:
         options:
           model: Qwen/Qwen2.5-7B-Instruct
           temperature: 0.7
-agent-platform:
-  models:
-    - id: mock-model
-      provider: mock
-      display-name: Mock Model
-      enabled: true
-
-    - id: siliconflow-qwen
-      provider: openai-compatible
-      display-name: SiliconFlow Qwen
-      base-url: https://api.siliconflow.cn
-      api-key: ${OPENAI_API_KEY:}
-      model-name: Qwen/Qwen2.5-7B-Instruct
-      temperature: 0.7
-      enabled: true
-
-    - id: siliconflow-deepseek
-      provider: openai-compatible
-      display-name: SiliconFlow DeepSeek
-      base-url: https://api.siliconflow.cn
-      api-key: ${OPENAI_API_KEY:}
-      model-name: deepseek-ai/DeepSeek-V3.1
-      temperature: 0.7
-      enabled: true

@@ -43,3 +43,27 @@ spring:
         options:
           model: Qwen/Qwen2.5-7B-Instruct
           temperature: 0.7
+agent-platform:
+  models:
+    - id: mock-model
+      provider: mock
+      display-name: Mock Model
+      enabled: true
+
+    - id: siliconflow-qwen
+      provider: openai-compatible
+      display-name: SiliconFlow Qwen
+      base-url: https://api.siliconflow.cn
+      api-key: ${OPENAI_API_KEY:}
+      model-name: Qwen/Qwen2.5-7B-Instruct
+      temperature: 0.7
+      enabled: true
+
+    - id: siliconflow-deepseek
+      provider: openai-compatible
+      display-name: SiliconFlow DeepSeek
+      base-url: https://api.siliconflow.cn
+      api-key: ${OPENAI_API_KEY:}
+      model-name: deepseek-ai/DeepSeek-V3.1
+      temperature: 0.7
+      enabled: true

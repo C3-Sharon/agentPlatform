@@ -13,13 +13,18 @@ import com.sharon.agentplatform.skill.core.SkillResult;
 import org.springframework.stereotype.Component;
 import com.sharon.agentplatform.model.service.ModelService;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class AgentRuntime {
 
     private static final String MOCK_MODEL = "mock-model";
+    private static final Pattern RESUME_FILE_ID_PATTERN = Pattern.compile("resumeFileId\\s*[:=\\uFF1A]\\s*([^\\s\\uFF0C,\\u3002\\uFF1B;]+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern JOB_POSTING_ID_PATTERN = Pattern.compile("jobPostingId\\s*[:=\\uFF1A]\\s*(\\d+)", Pattern.CASE_INSENSITIVE);
 
     private final SkillRegistry skillRegistry;
     private final MemoryService memoryService;
@@ -126,6 +131,7 @@ public class AgentRuntime {
                         answer = handleSkillDecision(
                                 decision,
                                 message,
+                                conversationId,
                                 modelId,
                                 shortTermMessages,
                                 longTermMemories,
@@ -135,6 +141,7 @@ public class AgentRuntime {
                     } else {
                         answer = handleByRuleFallback(
                                 message,
+                                conversationId,
                                 modelId,
                                 shortTermMessages,
                                 longTermMemories,
@@ -151,6 +158,7 @@ public class AgentRuntime {
 
                     answer = handleByRuleFallback(
                             message,
+                            conversationId,
                             modelId,
                             shortTermMessages,
                             longTermMemories,
@@ -230,6 +238,31 @@ public class AgentRuntime {
         return message.contains("计算")
                 || message.contains("算一下")
                 || message.matches(".*\\d+\\s*[+\\-*/]\\s*\\d+.*");
+    }
+
+    private boolean isResumeOptimizeIntent(String message) {
+        String lowerMessage = message.toLowerCase();
+        return lowerMessage.contains("resumefileid")
+                && lowerMessage.contains("jobpostingid")
+                && (message.contains("简历") || message.contains("优化") || message.contains("面试"));
+    }
+
+    private boolean isCalculatorIntentStrict(String message) {
+        String lowerMessage = message.toLowerCase();
+        if (lowerMessage.contains("resumefileid") || lowerMessage.contains("jobpostingid")) {
+            return false;
+        }
+
+        boolean hasNumber = message.matches(".*\\d+.*");
+        boolean hasExplicitKeyword = message.contains("计算")
+                || message.contains("算一下")
+                || message.contains("求值")
+                || message.contains("璁＄畻")
+                || message.contains("绠椾竴涓?");
+        boolean isMostlyMathExpression = message.trim().matches("[0-9\\s.()+\\-*/]+")
+                && message.matches(".*\\d+\\s*[+\\-*/]\\s*\\d+.*");
+
+        return hasNumber && (hasExplicitKeyword || isMostlyMathExpression);
     }
 
     private boolean isFileSearchIntent(String message) {
@@ -384,6 +417,53 @@ public class AgentRuntime {
         );
     }
 
+    private String handleResumeOptimize(
+            String message,
+            String conversationId,
+            String modelId,
+            List<ChatMessage> shortTermMessages,
+            List<LongTermMemory> longTermMemories,
+            List<AgentTrace> trace,
+            List<String> usedSkills
+    ) {
+        String resumeFileId = extractResumeFileId(message);
+        Long jobPostingId = extractJobPostingId(message);
+        String skillName = "resume_optimize";
+
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("conversationId", conversationId);
+        params.put("modelId", modelId);
+        params.put("resumeFileId", resumeFileId);
+        params.put("jobPostingId", jobPostingId);
+
+        trace.add(AgentTrace.success(
+                AgentStep.SELECT_SKILL,
+                "规则兜底选择 resume_optimize Skill",
+                Map.of(
+                        "skillName", skillName,
+                        "params", params
+                )
+        ));
+
+        SkillResult result = callSkillWithTrace(skillName, params, trace);
+        usedSkills.add(skillName);
+
+        if (shouldDirectReturnSkillResult(skillName, result)) {
+            return directReturnSkillResult(skillName, modelId, result, trace);
+        }
+
+        return summarizeSkillResultWithModel(
+                modelId,
+                message,
+                skillName,
+                params,
+                result,
+                shortTermMessages,
+                longTermMemories,
+                trace
+        );
+    }
+
     private SkillResult callSkillWithTrace(
             String skillName,
             Map<String, Object> params,
@@ -412,6 +492,32 @@ public class AgentRuntime {
         ));
 
         return result;
+    }
+
+    private boolean shouldDirectReturnSkillResult(String skillName, SkillResult skillResult) {
+        return "resume_optimize".equals(skillName)
+                && skillResult != null
+                && skillResult.isSuccess();
+    }
+
+    private String directReturnSkillResult(
+            String skillName,
+            String modelId,
+            SkillResult skillResult,
+            List<AgentTrace> trace
+    ) {
+        trace.add(AgentTrace.success(
+                AgentStep.GENERATE_ANSWER,
+                "resume_optimize Skill 结果已直接作为最终回答",
+                Map.of(
+                        "skillName", skillName,
+                        "modelId", modelId,
+                        "skillSuccess", true,
+                        "directReturn", true
+                )
+        ));
+
+        return skillResult.getResult() == null ? "" : skillResult.getResult().toString();
     }
 
     private Object safeResult(SkillResult result) {
@@ -458,6 +564,22 @@ public class AgentRuntime {
                 .trim();
 
         return cleaned;
+    }
+
+    private String extractResumeFileId(String message) {
+        Matcher matcher = RESUME_FILE_ID_PATTERN.matcher(message);
+        if (!matcher.find()) {
+            return "";
+        }
+        return matcher.group(1).trim();
+    }
+
+    private Long extractJobPostingId(String message) {
+        Matcher matcher = JOB_POSTING_ID_PATTERN.matcher(message);
+        if (!matcher.find()) {
+            return null;
+        }
+        return Long.parseLong(matcher.group(1));
     }
 
     private String extractFileKeyword(String message) {
@@ -673,6 +795,7 @@ public class AgentRuntime {
     private String handleSkillDecision(
             SkillDecision decision,
             String message,
+            String conversationId,
             String modelId,
             List<ChatMessage> shortTermMessages,
             List<LongTermMemory> longTermMemories,
@@ -680,7 +803,7 @@ public class AgentRuntime {
             List<String> usedSkills
     ) {
         String skillName = decision.getSkillName();
-        Map<String, Object> params = decision.getParams();
+        Map<String, Object> params = buildSkillDecisionParams(decision, conversationId, modelId);
 
         trace.add(AgentTrace.success(
                 AgentStep.SELECT_SKILL,
@@ -695,6 +818,10 @@ public class AgentRuntime {
         SkillResult result = callSkillWithTrace(skillName, params, trace);
         usedSkills.add(skillName);
 
+        if (shouldDirectReturnSkillResult(skillName, result)) {
+            return directReturnSkillResult(skillName, modelId, result, trace);
+        }
+
         return summarizeSkillResultWithModel(
                 modelId,
                 message,
@@ -706,14 +833,61 @@ public class AgentRuntime {
                 trace
         );
     }
+
+    private Map<String, Object> buildSkillDecisionParams(
+            SkillDecision decision,
+            String conversationId,
+            String modelId
+    ) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        if (decision.getParams() != null) {
+            params.putAll(decision.getParams());
+        }
+
+        if ("resume_optimize".equals(decision.getSkillName())) {
+            putIfMissing(params, "conversationId", conversationId);
+            putIfMissing(params, "modelId", modelId);
+        }
+
+        return params;
+    }
+
+    private void putIfMissing(Map<String, Object> params, String key, Object value) {
+        Object currentValue = params.get(key);
+        if (!params.containsKey(key)
+                || currentValue == null
+                || currentValue.toString().isBlank()) {
+            params.put(key, value);
+        }
+    }
+
     private String handleByRuleFallback(
             String message,
+            String conversationId,
             String modelId,
             List<ChatMessage> shortTermMessages,
             List<LongTermMemory> longTermMemories,
             List<AgentTrace> trace,
             List<String> usedSkills
     ) {
+        if (isResumeOptimizeIntent(message)) {
+            trace.add(AgentTrace.success(
+                    AgentStep.INTENT_DETECTION,
+                    "规则兜底：识别为简历优化意图",
+                    Map.of("intent", "resume_optimize")
+            ));
+
+            return handleResumeOptimize(
+                    message,
+                    conversationId,
+                    modelId,
+                    shortTermMessages,
+                    longTermMemories,
+                    trace,
+                    usedSkills
+            );
+        }
+
         if (isWeatherIntent(message)) {
             trace.add(AgentTrace.success(
                     AgentStep.INTENT_DETECTION,
@@ -731,7 +905,7 @@ public class AgentRuntime {
             );
         }
 
-        if (isCalculatorIntent(message)) {
+        if (isCalculatorIntentStrict(message)) {
             trace.add(AgentTrace.success(
                     AgentStep.INTENT_DETECTION,
                     "规则兜底：识别为计算意图",

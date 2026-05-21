@@ -28,7 +28,7 @@ public class DocxResumeFileParser implements ResumeFileParser {
             StringBuilder text = new StringBuilder();
             appendParagraphs(text, document.getParagraphs());
             appendTables(text, document.getTables());
-            return text.toString();
+            return ResumeTextCleaner.clean(text.toString());
         } catch (IOException exception) {
             throw new BusinessException("Failed to parse docx resume file", exception);
         }

@@ -4,6 +4,8 @@ import com.sharon.agentplatform.common.exception.BusinessException;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -11,6 +13,8 @@ import java.nio.file.Path;
 
 @Component
 public class PdfResumeFileParser implements ResumeFileParser {
+
+    private static final Logger log = LoggerFactory.getLogger(PdfResumeFileParser.class);
 
     @Override
     public boolean supports(String fileType) {
@@ -21,7 +25,16 @@ public class PdfResumeFileParser implements ResumeFileParser {
     public String parse(Path filePath) {
         try (PDDocument document = Loader.loadPDF(filePath.toFile())) {
             PDFTextStripper textStripper = new PDFTextStripper();
-            return textStripper.getText(document);
+            textStripper.setSortByPosition(true);
+            textStripper.setLineSeparator("\n");
+            textStripper.setParagraphEnd("\n");
+            textStripper.setPageEnd("\n\n");
+
+            String text = ResumeTextCleaner.clean(textStripper.getText(document));
+            if (text.length() < 100 || text.contains("\uFFFD")) {
+                log.warn("Parsed PDF resume text quality may be low: {}", filePath.getFileName());
+            }
+            return text;
         } catch (IOException exception) {
             throw new BusinessException("Failed to parse pdf resume file", exception);
         }

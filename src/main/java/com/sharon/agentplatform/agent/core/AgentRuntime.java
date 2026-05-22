@@ -12,6 +12,7 @@ import com.sharon.agentplatform.skill.core.SkillRegistry;
 import com.sharon.agentplatform.skill.core.SkillResult;
 import org.springframework.stereotype.Component;
 import com.sharon.agentplatform.model.service.ModelService;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,8 +24,11 @@ import java.util.regex.Pattern;
 public class AgentRuntime {
 
     private static final String MOCK_MODEL = "mock-model";
-    private static final Pattern RESUME_FILE_ID_PATTERN = Pattern.compile("resumeFileId\\s*[:=\\uFF1A]\\s*([^\\s\\uFF0C,\\u3002\\uFF1B;]+)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern JOB_POSTING_ID_PATTERN = Pattern.compile("jobPostingId\\s*[:=\\uFF1A]\\s*(\\d+)", Pattern.CASE_INSENSITIVE);
+    private static final String RESUME_OPTIMIZE_SKILL = "resume_optimize";
+    private static final String RESUME_FILE_ID_PARAM = "resumeFileId";
+    private static final String JOB_POSTING_ID_PARAM = "jobPostingId";
+    private static final Pattern RESUME_FILE_ID_PATTERN = Pattern.compile("(?:resumeFileId|fileId)\\s*[:=\\uFF1A]\\s*([A-Za-z0-9-]+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern JOB_POSTING_ID_PATTERN = Pattern.compile("(?:jobPostingId|岗位id|岗位ID)\\s*[:=\\uFF1A]\\s*([^\\s\\uFF0C,\\u3002\\uFF1B;]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern EXPLICIT_SKILL_CALL_ZH_PATTERN = Pattern.compile("(?:调用|使用)\\s*([A-Za-z0-9_-]+)(?:\\s*技能)?", Pattern.CASE_INSENSITIVE);
     private static final Pattern EXPLICIT_SKILL_CALL_EN_PATTERN = Pattern.compile("\\buse\\s+([A-Za-z0-9_-]+)(?:\\s+skill)?\\b", Pattern.CASE_INSENSITIVE);
     private static final Pattern SIMPLE_PARAM_PATTERN = Pattern.compile("(?:参数\\s*)?([A-Za-z0-9_-]+)\\s*=\\s*([^。\\.\\r\\n]+)", Pattern.CASE_INSENSITIVE);
@@ -33,17 +37,20 @@ public class AgentRuntime {
     private final MemoryService memoryService;
     private final ModelService modelService;
     private final LlmSkillDecisionService llmSkillDecisionService;
+    private final PendingSkillCallStore pendingSkillCallStore;
 
     public AgentRuntime(
             SkillRegistry skillRegistry,
             MemoryService memoryService,
             ModelService modelService,
-            LlmSkillDecisionService llmSkillDecisionService
+            LlmSkillDecisionService llmSkillDecisionService,
+            PendingSkillCallStore pendingSkillCallStore
     ) {
         this.skillRegistry = skillRegistry;
         this.memoryService = memoryService;
         this.modelService = modelService;
         this.llmSkillDecisionService = llmSkillDecisionService;
+        this.pendingSkillCallStore = pendingSkillCallStore;
     }
 
     public ChatResponse run(ChatRequest request) {
@@ -96,7 +103,29 @@ public class AgentRuntime {
 
             String answer;
 
-            if (isAskNameIntent(message, longTermMemories, shortTermMessages)) {
+            String pendingAnswer = handlePendingSkillCall(
+                    message,
+                    conversationId,
+                    modelId,
+                    shortTermMessages,
+                    longTermMemories,
+                    trace,
+                    usedSkills
+            );
+
+            if (pendingAnswer != null) {
+                answer = pendingAnswer;
+            } else if (shouldHandleResumeOptimizeBeforeLlm(message, conversationId, modelId)) {
+                answer = handleResumeOptimizeIntentBeforeLlm(
+                        message,
+                        conversationId,
+                        modelId,
+                        shortTermMessages,
+                        longTermMemories,
+                        trace,
+                        usedSkills
+                );
+            } else if (isAskNameIntent(message, longTermMemories, shortTermMessages)) {
                 trace.add(AgentTrace.success(
                         AgentStep.INTENT_DETECTION,
                         "识别为询问用户姓名",
@@ -244,10 +273,7 @@ public class AgentRuntime {
     }
 
     private boolean isResumeOptimizeIntent(String message) {
-        String lowerMessage = message.toLowerCase();
-        return lowerMessage.contains("resumefileid")
-                && lowerMessage.contains("jobpostingid")
-                && (message.contains("简历") || message.contains("优化") || message.contains("面试"));
+        return message.contains("简历") || message.contains("优化") || message.contains("面试");
     }
 
     private boolean isCalculatorIntentStrict(String message) {
@@ -431,7 +457,7 @@ public class AgentRuntime {
     ) {
         String resumeFileId = extractResumeFileId(message);
         Long jobPostingId = extractJobPostingId(message);
-        String skillName = "resume_optimize";
+        String skillName = RESUME_OPTIMIZE_SKILL;
 
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("conversationId", conversationId);
@@ -465,6 +491,218 @@ public class AgentRuntime {
                 longTermMemories,
                 trace
         );
+    }
+
+    private String handlePendingSkillCall(
+            String message,
+            String conversationId,
+            String modelId,
+            List<ChatMessage> shortTermMessages,
+            List<LongTermMemory> longTermMemories,
+            List<AgentTrace> trace,
+            List<String> usedSkills
+    ) {
+        PendingSkillCall pending = pendingSkillCallStore.get(conversationId).orElse(null);
+        if (pending == null) {
+            return null;
+        }
+
+        Map<String, Object> knownParams = new LinkedHashMap<>();
+        if (pending.getKnownParams() != null) {
+            knownParams.putAll(pending.getKnownParams());
+        }
+        knownParams.putAll(extractResumeOptimizeParams(message));
+        knownParams.put("conversationId", conversationId);
+        knownParams.put("modelId", modelId);
+
+        List<String> missingParams = findMissingResumeOptimizeParams(knownParams);
+
+        trace.add(AgentTrace.success(
+                AgentStep.INTENT_DETECTION,
+                "继续未完成的 Skill 调用",
+                Map.of(
+                        "skillName", pending.getSkillName(),
+                        "knownParams", knownParams,
+                        "missingParams", missingParams
+                )
+        ));
+
+        if (missingParams.isEmpty()) {
+            pendingSkillCallStore.clear(conversationId);
+
+            trace.add(AgentTrace.success(
+                    AgentStep.SELECT_SKILL,
+                    "补齐参数后选择 pending Skill",
+                    Map.of(
+                            "skillName", pending.getSkillName(),
+                            "params", knownParams
+                    )
+            ));
+
+            SkillResult result = callSkillWithTrace(pending.getSkillName(), knownParams, trace);
+            usedSkills.add(pending.getSkillName());
+
+            if (shouldDirectReturnSkillResult(pending.getSkillName(), result)) {
+                return directReturnSkillResult(pending.getSkillName(), modelId, result, trace);
+            }
+
+            return summarizeSkillResultWithModel(
+                    modelId,
+                    message,
+                    pending.getSkillName(),
+                    knownParams,
+                    result,
+                    shortTermMessages,
+                    longTermMemories,
+                    trace
+            );
+        }
+
+        pending.setKnownParams(knownParams);
+        pending.setMissingParams(missingParams);
+        pendingSkillCallStore.save(pending);
+
+        trace.add(AgentTrace.success(
+                AgentStep.INTENT_DETECTION,
+                "继续未完成的 Skill 调用但参数仍不足",
+                Map.of(
+                        "skillName", pending.getSkillName(),
+                        "knownParams", knownParams,
+                        "missingParams", missingParams
+                )
+        ));
+
+        return buildResumeOptimizeAskAnswer(missingParams);
+    }
+
+    private boolean shouldHandleResumeOptimizeBeforeLlm(
+            String message,
+            String conversationId,
+            String modelId
+    ) {
+        if (!isResumeOptimizeIntent(message)) {
+            return false;
+        }
+
+        return detectExplicitSkillCall(message, conversationId, modelId) == null;
+    }
+
+    private String handleResumeOptimizeIntentBeforeLlm(
+            String message,
+            String conversationId,
+            String modelId,
+            List<ChatMessage> shortTermMessages,
+            List<LongTermMemory> longTermMemories,
+            List<AgentTrace> trace,
+            List<String> usedSkills
+    ) {
+        Map<String, Object> knownParams = extractResumeOptimizeParams(message);
+        knownParams.put("conversationId", conversationId);
+        knownParams.put("modelId", modelId);
+
+        List<String> missingParams = findMissingResumeOptimizeParams(knownParams);
+        if (missingParams.isEmpty()) {
+            trace.add(AgentTrace.success(
+                    AgentStep.INTENT_DETECTION,
+                    "规则兜底：识别为简历优化意图",
+                    Map.of("intent", RESUME_OPTIMIZE_SKILL)
+            ));
+
+            return handleResumeOptimize(
+                    message,
+                    conversationId,
+                    modelId,
+                    shortTermMessages,
+                    longTermMemories,
+                    trace,
+                    usedSkills
+            );
+        }
+
+        PendingSkillCall pending = new PendingSkillCall();
+        pending.setConversationId(conversationId);
+        pending.setSkillName(RESUME_OPTIMIZE_SKILL);
+        pending.setKnownParams(knownParams);
+        pending.setMissingParams(missingParams);
+        pending.setCreatedAt(LocalDateTime.now());
+        pendingSkillCallStore.save(pending);
+
+        trace.add(AgentTrace.success(
+                AgentStep.INTENT_DETECTION,
+                "识别为简历优化意图，但参数不足，进入追问",
+                Map.of(
+                        "skillName", RESUME_OPTIMIZE_SKILL,
+                        "knownParams", knownParams,
+                        "missingParams", missingParams
+                )
+        ));
+
+        return buildResumeOptimizeAskAnswer(missingParams);
+    }
+
+    private Map<String, Object> extractResumeOptimizeParams(String message) {
+        Map<String, Object> params = new LinkedHashMap<>();
+
+        String resumeFileId = extractResumeFileId(message);
+        if (resumeFileId != null && !resumeFileId.isBlank()) {
+            params.put(RESUME_FILE_ID_PARAM, resumeFileId);
+        }
+
+        Long jobPostingId = extractJobPostingId(message);
+        if (jobPostingId != null) {
+            params.put(JOB_POSTING_ID_PARAM, jobPostingId);
+        }
+
+        return params;
+    }
+
+    private List<String> findMissingResumeOptimizeParams(Map<String, Object> params) {
+        List<String> missingParams = new ArrayList<>();
+
+        Object resumeFileId = params.get(RESUME_FILE_ID_PARAM);
+        if (resumeFileId == null || resumeFileId.toString().isBlank()) {
+            missingParams.add(RESUME_FILE_ID_PARAM);
+        }
+
+        if (!hasValidJobPostingId(params.get(JOB_POSTING_ID_PARAM))) {
+            missingParams.add(JOB_POSTING_ID_PARAM);
+        }
+
+        return missingParams;
+    }
+
+    private boolean hasValidJobPostingId(Object value) {
+        if (value instanceof Long) {
+            return true;
+        }
+        if (value instanceof Integer) {
+            return true;
+        }
+        if (value instanceof String stringValue) {
+            try {
+                Long.parseLong(stringValue.trim());
+                return true;
+            } catch (NumberFormatException exception) {
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private String buildResumeOptimizeAskAnswer(List<String> missingParams) {
+        boolean missingResumeFileId = missingParams.contains(RESUME_FILE_ID_PARAM);
+        boolean missingJobPostingId = missingParams.contains(JOB_POSTING_ID_PARAM);
+
+        if (missingResumeFileId && missingJobPostingId) {
+            return "我可以调用 resume_optimize 帮你优化简历并生成面试建议，但还缺少 resumeFileId 和 jobPostingId。请先上传并解析简历获取 resumeFileId，再读取岗位网页获取 jobPostingId，然后把这两个参数发给我。";
+        }
+        if (missingResumeFileId) {
+            return "我还缺少 resumeFileId。请提供已上传并解析的简历 fileId。";
+        }
+        if (missingJobPostingId) {
+            return "我还缺少 jobPostingId。请提供读取岗位网页后返回的 jobPostingId。";
+        }
+        return "";
     }
 
     private String handleExplicitSkillCall(
@@ -539,7 +777,7 @@ public class AgentRuntime {
     }
 
     private boolean shouldDirectReturnSkillResult(String skillName, SkillResult skillResult) {
-        return "resume_optimize".equals(skillName)
+        return RESUME_OPTIMIZE_SKILL.equals(skillName)
                 && skillResult != null
                 && skillResult.isSuccess();
     }
@@ -623,7 +861,11 @@ public class AgentRuntime {
         if (!matcher.find()) {
             return null;
         }
-        return Long.parseLong(matcher.group(1));
+        try {
+            return Long.parseLong(matcher.group(1).trim());
+        } catch (NumberFormatException exception) {
+            return null;
+        }
     }
 
     private String extractFileKeyword(String message) {
@@ -943,7 +1185,7 @@ public class AgentRuntime {
             params.putAll(decision.getParams());
         }
 
-        if ("resume_optimize".equals(decision.getSkillName())) {
+        if (RESUME_OPTIMIZE_SKILL.equals(decision.getSkillName())) {
             putIfMissing(params, "conversationId", conversationId);
             putIfMissing(params, "modelId", modelId);
         }

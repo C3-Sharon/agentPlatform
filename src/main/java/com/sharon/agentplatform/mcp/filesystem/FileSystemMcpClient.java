@@ -76,6 +76,10 @@ public class FileSystemMcpClient implements McpClient {
         try {
             ensureWorkspaceExists();
 
+            if (toolName == null || toolName.isBlank()) {
+                return McpToolResult.fail("Missing required argument: toolName");
+            }
+
             return switch (toolName) {
                 case "listFiles" -> listFiles(arguments);
                 case "readFile" -> readFile(arguments);

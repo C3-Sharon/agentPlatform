@@ -1,6 +1,8 @@
 package com.sharon.agentplatform.skill.core;
 
 import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -12,6 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class SkillRegistry {
+
+    private static final Logger log = LoggerFactory.getLogger(SkillRegistry.class);
 
     private final Collection<Skill> skillBeans;
 
@@ -38,7 +42,7 @@ public class SkillRegistry {
         }
 
         if (skills.containsKey(name)) {
-            throw new IllegalStateException("Duplicate skill name: " + name);
+            log.info("Overwrite existing skill registration: {}", name);
         }
 
         skills.put(name, skill);

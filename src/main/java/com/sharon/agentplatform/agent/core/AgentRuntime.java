@@ -25,6 +25,9 @@ public class AgentRuntime {
     private static final String MOCK_MODEL = "mock-model";
     private static final Pattern RESUME_FILE_ID_PATTERN = Pattern.compile("resumeFileId\\s*[:=\\uFF1A]\\s*([^\\s\\uFF0C,\\u3002\\uFF1B;]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern JOB_POSTING_ID_PATTERN = Pattern.compile("jobPostingId\\s*[:=\\uFF1A]\\s*(\\d+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern EXPLICIT_SKILL_CALL_ZH_PATTERN = Pattern.compile("(?:调用|使用)\\s*([A-Za-z0-9_-]+)(?:\\s*技能)?", Pattern.CASE_INSENSITIVE);
+    private static final Pattern EXPLICIT_SKILL_CALL_EN_PATTERN = Pattern.compile("\\buse\\s+([A-Za-z0-9_-]+)(?:\\s+skill)?\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SIMPLE_PARAM_PATTERN = Pattern.compile("(?:参数\\s*)?([A-Za-z0-9_-]+)\\s*=\\s*([^。\\.\\r\\n]+)", Pattern.CASE_INSENSITIVE);
 
     private final SkillRegistry skillRegistry;
     private final MemoryService memoryService;
@@ -464,6 +467,47 @@ public class AgentRuntime {
         );
     }
 
+    private String handleExplicitSkillCall(
+            ExplicitSkillCall explicitSkillCall,
+            String message,
+            String conversationId,
+            String modelId,
+            List<ChatMessage> shortTermMessages,
+            List<LongTermMemory> longTermMemories,
+            List<AgentTrace> trace,
+            List<String> usedSkills
+    ) {
+        String skillName = explicitSkillCall.skillName();
+        Map<String, Object> params = explicitSkillCall.params();
+
+        trace.add(AgentTrace.success(
+                AgentStep.SELECT_SKILL,
+                "规则兜底选择显式指定的 Skill",
+                Map.of(
+                        "skillName", skillName,
+                        "params", params
+                )
+        ));
+
+        SkillResult result = callSkillWithTrace(skillName, params, trace);
+        usedSkills.add(skillName);
+
+        if (shouldDirectReturnSkillResult(skillName, result)) {
+            return directReturnSkillResult(skillName, modelId, result, trace);
+        }
+
+        return summarizeSkillResultWithModel(
+                modelId,
+                message,
+                skillName,
+                params,
+                result,
+                shortTermMessages,
+                longTermMemories,
+                trace
+        );
+    }
+
     private SkillResult callSkillWithTrace(
             String skillName,
             Map<String, Object> params,
@@ -597,6 +641,61 @@ public class AgentRuntime {
         }
         return "README";
     }
+
+    private ExplicitSkillCall detectExplicitSkillCall(
+            String message,
+            String conversationId,
+            String modelId
+    ) {
+        String skillName = extractExplicitSkillName(message);
+        if (skillName == null || skillName.isBlank()) {
+            return null;
+        }
+
+        if (skillRegistry.getSkill(skillName).isEmpty()) {
+            return null;
+        }
+
+        Map<String, Object> params = extractSimpleParams(message);
+        params.put("conversationId", conversationId);
+        params.put("modelId", modelId);
+
+        return new ExplicitSkillCall(skillName, params);
+    }
+
+    private String extractExplicitSkillName(String message) {
+        Matcher zhMatcher = EXPLICIT_SKILL_CALL_ZH_PATTERN.matcher(message);
+        if (zhMatcher.find()) {
+            return zhMatcher.group(1).trim();
+        }
+
+        Matcher enMatcher = EXPLICIT_SKILL_CALL_EN_PATTERN.matcher(message);
+        if (enMatcher.find()) {
+            return enMatcher.group(1).trim();
+        }
+
+        return null;
+    }
+
+    private Map<String, Object> extractSimpleParams(String message) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        Matcher matcher = SIMPLE_PARAM_PATTERN.matcher(message);
+
+        while (matcher.find()) {
+            String key = matcher.group(1).trim();
+            String value = matcher.group(2).trim();
+
+            if (!key.isBlank() && !value.isBlank()) {
+                params.put(key, value);
+            }
+        }
+
+        return params;
+    }
+
+    private record ExplicitSkillCall(String skillName, Map<String, Object> params) {
+    }
+
     private String buildSystemPrompt(
             List<ChatMessage> shortTermMessages,
             List<LongTermMemory> longTermMemories
@@ -870,6 +969,26 @@ public class AgentRuntime {
             List<AgentTrace> trace,
             List<String> usedSkills
     ) {
+        ExplicitSkillCall explicitSkillCall = detectExplicitSkillCall(message, conversationId, modelId);
+        if (explicitSkillCall != null) {
+            trace.add(AgentTrace.success(
+                    AgentStep.INTENT_DETECTION,
+                    "规则兜底：识别为显式 Skill 调用",
+                    Map.of("intent", "explicit_skill_call")
+            ));
+
+            return handleExplicitSkillCall(
+                    explicitSkillCall,
+                    message,
+                    conversationId,
+                    modelId,
+                    shortTermMessages,
+                    longTermMemories,
+                    trace,
+                    usedSkills
+            );
+        }
+
         if (isResumeOptimizeIntent(message)) {
             trace.add(AgentTrace.success(
                     AgentStep.INTENT_DETECTION,

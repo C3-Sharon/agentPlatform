@@ -3,6 +3,7 @@ package com.sharon.agentplatform.agent.core;
 import com.sharon.agentplatform.agent.service.LlmSkillDecisionService;
 import com.sharon.agentplatform.agent.dto.ChatRequest;
 import com.sharon.agentplatform.agent.dto.ChatResponse;
+import com.sharon.agentplatform.agent.history.service.AgentRunHistoryService;
 import com.sharon.agentplatform.common.exception.ModelCallException;
 import com.sharon.agentplatform.memory.core.ChatMessage;
 import com.sharon.agentplatform.memory.core.LongTermMemory;
@@ -41,6 +42,7 @@ public class AgentRuntime {
     private final LlmSkillDecisionService llmSkillDecisionService;
     private final PendingSkillCallStore pendingSkillCallStore;
     private final SkillParameterResolver skillParameterResolver;
+    private final AgentRunHistoryService agentRunHistoryService;
 
     public AgentRuntime(
             SkillRegistry skillRegistry,
@@ -48,7 +50,8 @@ public class AgentRuntime {
             ModelService modelService,
             LlmSkillDecisionService llmSkillDecisionService,
             PendingSkillCallStore pendingSkillCallStore,
-            SkillParameterResolver skillParameterResolver
+            SkillParameterResolver skillParameterResolver,
+            AgentRunHistoryService agentRunHistoryService
     ) {
         this.skillRegistry = skillRegistry;
         this.memoryService = memoryService;
@@ -56,9 +59,12 @@ public class AgentRuntime {
         this.llmSkillDecisionService = llmSkillDecisionService;
         this.pendingSkillCallStore = pendingSkillCallStore;
         this.skillParameterResolver = skillParameterResolver;
+        this.agentRunHistoryService = agentRunHistoryService;
     }
 
     public ChatResponse run(ChatRequest request) {
+        LocalDateTime startedAt = LocalDateTime.now();
+        long startMillis = System.currentTimeMillis();
         List<AgentTrace> trace = new ArrayList<>();
         List<String> usedSkills = new ArrayList<>();
 
@@ -81,6 +87,20 @@ public class AgentRuntime {
                     AgentStep.ERROR,
                     "用户输入为空"
             ));
+
+            saveAgentRunHistory(
+                    conversationId,
+                    modelId,
+                    message,
+                    "请输入有效的问题。",
+                    modelId,
+                    usedSkills,
+                    trace,
+                    "FAILED",
+                    "User message is blank",
+                    startedAt,
+                    startMillis
+            );
 
             return new ChatResponse(
                     conversationId,
@@ -247,6 +267,20 @@ public class AgentRuntime {
                     )
             ));
 
+            saveAgentRunHistory(
+                    conversationId,
+                    modelId,
+                    message,
+                    answer,
+                    modelId,
+                    usedSkills,
+                    trace,
+                    "SUCCESS",
+                    null,
+                    startedAt,
+                    startMillis
+            );
+
             return new ChatResponse(
                     conversationId,
                     answer,
@@ -262,6 +296,21 @@ public class AgentRuntime {
                     Map.of("errorMessage", e.getMessage() == null ? "" : e.getMessage())
             ));
 
+            String errorAnswer = "Agent 执行过程中出现错误：" + e.getMessage();
+            saveAgentRunHistory(
+                    conversationId,
+                    modelId,
+                    message,
+                    errorAnswer,
+                    modelId,
+                    usedSkills,
+                    trace,
+                    "FAILED",
+                    e.getMessage(),
+                    startedAt,
+                    startMillis
+            );
+
             return new ChatResponse(
                     conversationId,
                     "Agent 执行过程中出现错误：" + e.getMessage(),
@@ -270,6 +319,35 @@ public class AgentRuntime {
                     trace
             );
         }
+    }
+
+    private void saveAgentRunHistory(String conversationId,
+                                     String modelId,
+                                     String userMessage,
+                                     String answer,
+                                     String usedModel,
+                                     List<String> usedSkills,
+                                     List<AgentTrace> trace,
+                                     String status,
+                                     String errorMessage,
+                                     LocalDateTime startedAt,
+                                     long startMillis) {
+        LocalDateTime finishedAt = LocalDateTime.now();
+        long durationMs = System.currentTimeMillis() - startMillis;
+        agentRunHistoryService.saveRun(
+                conversationId,
+                modelId,
+                userMessage,
+                answer,
+                usedModel,
+                usedSkills,
+                trace,
+                status,
+                errorMessage,
+                startedAt,
+                finishedAt,
+                durationMs
+        );
     }
 
     private String normalizeConversationId(String conversationId) {

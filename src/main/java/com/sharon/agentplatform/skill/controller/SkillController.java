@@ -7,9 +7,12 @@ import com.sharon.agentplatform.skill.core.SkillMetadata;
 import com.sharon.agentplatform.skill.core.SkillRegistry;
 import com.sharon.agentplatform.skill.core.SkillResult;
 import com.sharon.agentplatform.skill.dto.SkillCallRequest;
+import com.sharon.agentplatform.skill.dto.SkillStatsResponse;
+import com.sharon.agentplatform.skill.service.SkillStatsService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -17,9 +20,11 @@ import java.util.Map;
 public class SkillController {
 
     private final SkillRegistry skillRegistry;
+    private final SkillStatsService skillStatsService;
 
-    public SkillController(SkillRegistry skillRegistry) {
+    public SkillController(SkillRegistry skillRegistry, SkillStatsService skillStatsService) {
         this.skillRegistry = skillRegistry;
+        this.skillStatsService = skillStatsService;
     }
 
     @GetMapping
@@ -30,6 +35,11 @@ public class SkillController {
                 .toList();
 
         return ApiResponse.success(skills);
+    }
+
+    @GetMapping("/stats")
+    public ApiResponse<List<SkillStatsResponse>> getSkillStats() {
+        return ApiResponse.success(skillStatsService.getSkillStats());
     }
 
     @GetMapping("/{name}")

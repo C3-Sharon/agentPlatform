@@ -1,7 +1,8 @@
 package com.sharon.agentplatform.resume.service;
 
 import com.sharon.agentplatform.common.exception.BusinessException;
-import com.sharon.agentplatform.model.service.ModelService;
+import com.sharon.agentplatform.resume.dto.ResumeAnalysisTaskStatusResponse;
+import com.sharon.agentplatform.resume.dto.ResumeOptimizeAsyncResponse;
 import com.sharon.agentplatform.resume.dto.ResumeOptimizeRequest;
 import com.sharon.agentplatform.resume.dto.ResumeOptimizeResponse;
 import com.sharon.agentplatform.resume.persistence.ResumeAnalysisStatus;
@@ -13,7 +14,6 @@ import com.sharon.agentplatform.resume.persistence.repository.JobPostingReposito
 import com.sharon.agentplatform.resume.persistence.repository.ResumeAnalysisTaskRepository;
 import com.sharon.agentplatform.resume.persistence.repository.ResumeFileRepository;
 import com.sharon.agentplatform.resume.persistence.repository.ResumeOptimizationResultRepository;
-import com.sharon.agentplatform.resume.prompt.ResumePromptBuilder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -22,73 +22,74 @@ import java.time.LocalDateTime;
 public class ResumeOptimizeService {
 
     private static final String DEFAULT_MODEL_ID = "siliconflow-qwen";
-    private static final String SYSTEM_PROMPT = "你是一名专业的校园招聘简历优化顾问，擅长根据岗位要求优化中文简历，并给出面试准备建议。";
 
     private final ResumeFileRepository resumeFileRepository;
     private final JobPostingRepository jobPostingRepository;
     private final ResumeAnalysisTaskRepository resumeAnalysisTaskRepository;
     private final ResumeOptimizationResultRepository resumeOptimizationResultRepository;
-    private final ResumePromptBuilder resumePromptBuilder;
-    private final ResumeOptimizeResultParser resumeOptimizeResultParser;
-    private final ModelService modelService;
+    private final ResumeOptimizeTaskRunner resumeOptimizeTaskRunner;
+    private final ResumeOptimizeAsyncExecutor resumeOptimizeAsyncExecutor;
 
     public ResumeOptimizeService(ResumeFileRepository resumeFileRepository,
                                  JobPostingRepository jobPostingRepository,
                                  ResumeAnalysisTaskRepository resumeAnalysisTaskRepository,
                                  ResumeOptimizationResultRepository resumeOptimizationResultRepository,
-                                 ResumePromptBuilder resumePromptBuilder,
-                                 ResumeOptimizeResultParser resumeOptimizeResultParser,
-                                 ModelService modelService) {
+                                 ResumeOptimizeTaskRunner resumeOptimizeTaskRunner,
+                                 ResumeOptimizeAsyncExecutor resumeOptimizeAsyncExecutor) {
         this.resumeFileRepository = resumeFileRepository;
         this.jobPostingRepository = jobPostingRepository;
         this.resumeAnalysisTaskRepository = resumeAnalysisTaskRepository;
         this.resumeOptimizationResultRepository = resumeOptimizationResultRepository;
-        this.resumePromptBuilder = resumePromptBuilder;
-        this.resumeOptimizeResultParser = resumeOptimizeResultParser;
-        this.modelService = modelService;
+        this.resumeOptimizeTaskRunner = resumeOptimizeTaskRunner;
+        this.resumeOptimizeAsyncExecutor = resumeOptimizeAsyncExecutor;
     }
 
     public ResumeOptimizeResponse optimize(ResumeOptimizeRequest request) {
-        ResumeAnalysisTaskEntity task = null;
+        validateRequest(request);
 
-        try {
-            validateRequest(request);
+        String modelId = getModelId(request);
+        ResumeFileEntity resumeFile = findReadyResumeFile(request);
+        validateReadyJobPosting(request);
+        ResumeAnalysisTaskEntity task = createTask(request, modelId, resumeFile);
 
-            String modelId = getModelId(request);
-            ResumeFileEntity resumeFile = resumeFileRepository.findByFileId(request.getResumeFileId())
-                    .orElseThrow(() -> new BusinessException("Resume file not found: " + request.getResumeFileId()));
-            if (resumeFile.getParsedText() == null || resumeFile.getParsedText().isBlank()) {
-                throw new BusinessException("Resume file has not been parsed: " + request.getResumeFileId());
-            }
+        return resumeOptimizeTaskRunner.runExistingTask(task.getId());
+    }
 
-            JobPostingEntity jobPosting = jobPostingRepository.findById(request.getJobPostingId())
-                    .orElseThrow(() -> new BusinessException("Job posting not found: " + request.getJobPostingId()));
-            if (jobPosting.getRawText() == null || jobPosting.getRawText().isBlank()) {
-                throw new BusinessException("Job posting text is empty: " + request.getJobPostingId());
-            }
+    public ResumeOptimizeAsyncResponse submitAsync(ResumeOptimizeRequest request) {
+        validateRequest(request);
 
-            task = createTask(request, modelId, resumeFile);
+        String modelId = getModelId(request);
+        ResumeFileEntity resumeFile = findReadyResumeFile(request);
+        validateReadyJobPosting(request);
+        ResumeAnalysisTaskEntity task = createTask(request, modelId, resumeFile);
 
-            String userPrompt = resumePromptBuilder.buildOptimizePrompt(jobPosting.getRawText(), resumeFile.getParsedText());
-            String rawModelResponse = modelService.chatWithContext(modelId, SYSTEM_PROMPT, userPrompt);
-            if (rawModelResponse == null || rawModelResponse.isBlank()) {
-                throw new BusinessException("Resume optimize model response is empty");
-            }
+        resumeOptimizeAsyncExecutor.execute(task.getId());
 
-            ResumeOptimizeResponse parsedResponse = resumeOptimizeResultParser.parse(task.getId(), null, rawModelResponse);
+        ResumeOptimizeAsyncResponse response = new ResumeOptimizeAsyncResponse();
+        response.setTaskId(task.getId());
+        response.setStatus(task.getStatus());
+        response.setMessage("Resume optimize task submitted");
+        return response;
+    }
 
-            ResumeOptimizationResultEntity result = createResult(task.getId(), parsedResponse, rawModelResponse);
-            parsedResponse.setResultId(result.getId());
+    public ResumeAnalysisTaskStatusResponse getTaskStatus(Long taskId) {
+        ResumeAnalysisTaskEntity task = resumeAnalysisTaskRepository.findById(taskId)
+                .orElseThrow(() -> new BusinessException("Resume analysis task not found: " + taskId));
 
-            task.setStatus(ResumeAnalysisStatus.SUCCESS.name());
-            task.setUpdatedAt(LocalDateTime.now());
-            resumeAnalysisTaskRepository.save(task);
+        ResumeAnalysisTaskStatusResponse response = new ResumeAnalysisTaskStatusResponse();
+        response.setTaskId(task.getId());
+        response.setStatus(task.getStatus());
+        response.setErrorMessage(task.getErrorMessage());
+        response.setCreatedAt(task.getCreatedAt());
+        response.setUpdatedAt(task.getUpdatedAt());
 
-            return parsedResponse;
-        } catch (RuntimeException exception) {
-            markTaskFailed(task, exception);
-            throw exception;
+        if (ResumeAnalysisStatus.SUCCESS.name().equals(task.getStatus())) {
+            ResumeOptimizationResultEntity result = resumeOptimizationResultRepository.findFirstByTaskIdOrderByIdDesc(task.getId())
+                    .orElseThrow(() -> new BusinessException("Resume optimization result not found for task: " + task.getId()));
+            response.setResult(toOptimizeResponse(result));
         }
+
+        return response;
     }
 
     private void validateRequest(ResumeOptimizeRequest request) {
@@ -113,6 +114,24 @@ public class ResumeOptimizeService {
         return request.getModelId().trim();
     }
 
+    private ResumeFileEntity findReadyResumeFile(ResumeOptimizeRequest request) {
+        ResumeFileEntity resumeFile = resumeFileRepository.findByFileId(request.getResumeFileId())
+                .orElseThrow(() -> new BusinessException("Resume file not found: " + request.getResumeFileId()));
+        if (resumeFile.getParsedText() == null || resumeFile.getParsedText().isBlank()) {
+            throw new BusinessException("Resume file has not been parsed: " + request.getResumeFileId());
+        }
+
+        return resumeFile;
+    }
+
+    private void validateReadyJobPosting(ResumeOptimizeRequest request) {
+        JobPostingEntity jobPosting = jobPostingRepository.findById(request.getJobPostingId())
+                .orElseThrow(() -> new BusinessException("Job posting not found: " + request.getJobPostingId()));
+        if (jobPosting.getRawText() == null || jobPosting.getRawText().isBlank()) {
+            throw new BusinessException("Job posting text is empty: " + request.getJobPostingId());
+        }
+    }
+
     private ResumeAnalysisTaskEntity createTask(ResumeOptimizeRequest request, String modelId, ResumeFileEntity resumeFile) {
         LocalDateTime now = LocalDateTime.now();
 
@@ -128,29 +147,16 @@ public class ResumeOptimizeService {
         return resumeAnalysisTaskRepository.save(task);
     }
 
-    private ResumeOptimizationResultEntity createResult(Long taskId,
-                                                        ResumeOptimizeResponse parsedResponse,
-                                                        String rawModelResponse) {
-        ResumeOptimizationResultEntity result = new ResumeOptimizationResultEntity();
-        result.setTaskId(taskId);
-        result.setJobRequirementSummary(parsedResponse.getJobRequirementSummary());
-        result.setMatchAnalysis(parsedResponse.getMatchAnalysis());
-        result.setOptimizationSuggestions(parsedResponse.getOptimizationSuggestions());
-        result.setOptimizedResume(parsedResponse.getOptimizedResume());
-        result.setInterviewSuggestions(parsedResponse.getInterviewSuggestions());
-        result.setRawModelResponse(rawModelResponse);
-        result.setCreatedAt(LocalDateTime.now());
-        return resumeOptimizationResultRepository.save(result);
-    }
-
-    private void markTaskFailed(ResumeAnalysisTaskEntity task, RuntimeException exception) {
-        if (task == null) {
-            return;
-        }
-
-        task.setStatus(ResumeAnalysisStatus.FAILED.name());
-        task.setErrorMessage(exception.getMessage());
-        task.setUpdatedAt(LocalDateTime.now());
-        resumeAnalysisTaskRepository.save(task);
+    private ResumeOptimizeResponse toOptimizeResponse(ResumeOptimizationResultEntity result) {
+        ResumeOptimizeResponse response = new ResumeOptimizeResponse();
+        response.setTaskId(result.getTaskId());
+        response.setResultId(result.getId());
+        response.setJobRequirementSummary(result.getJobRequirementSummary());
+        response.setMatchAnalysis(result.getMatchAnalysis());
+        response.setOptimizationSuggestions(result.getOptimizationSuggestions());
+        response.setOptimizedResume(result.getOptimizedResume());
+        response.setInterviewSuggestions(result.getInterviewSuggestions());
+        response.setRawModelResponse(result.getRawModelResponse());
+        return response;
     }
 }

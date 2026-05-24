@@ -2,9 +2,12 @@ package com.sharon.agentplatform.memory.controller;
 
 import com.sharon.agentplatform.common.ApiResponse;
 import com.sharon.agentplatform.memory.dto.AddLongTermMemoryRequest;
+import com.sharon.agentplatform.memory.dto.ConversationMessageResponse;
 import com.sharon.agentplatform.memory.dto.MemoryViewResponse;
 import com.sharon.agentplatform.memory.service.MemoryService;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/memory")
@@ -23,6 +26,13 @@ public class MemoryController {
         return ApiResponse.success(
                 memoryService.getMemoryView(conversationId)
         );
+    }
+
+    @GetMapping("/conversations/{conversationId}/messages")
+    public ApiResponse<List<ConversationMessageResponse>> getConversationMessages(
+            @PathVariable String conversationId
+    ) {
+        return ApiResponse.success(memoryService.getConversationMessages(conversationId));
     }
 
     @PostMapping("/{conversationId}/long-term")

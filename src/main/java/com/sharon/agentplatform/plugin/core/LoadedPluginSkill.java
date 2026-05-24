@@ -6,9 +6,11 @@ public class LoadedPluginSkill {
 
     private String skillName;
     private String displayName;
+    private String description;
     private String version;
     private String jarPath;
     private String className;
+    private Object metadata;
     private LocalDateTime loadedAt;
 
     public String getSkillName() {
@@ -25,6 +27,14 @@ public class LoadedPluginSkill {
 
     public void setDisplayName(String displayName) {
         this.displayName = displayName;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
     }
 
     public String getVersion() {
@@ -49,6 +59,14 @@ public class LoadedPluginSkill {
 
     public void setClassName(String className) {
         this.className = className;
+    }
+
+    public Object getMetadata() {
+        return metadata;
+    }
+
+    public void setMetadata(Object metadata) {
+        this.metadata = metadata;
     }
 
     public LocalDateTime getLoadedAt() {

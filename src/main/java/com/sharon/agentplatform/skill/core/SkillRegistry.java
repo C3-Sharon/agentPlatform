@@ -49,6 +49,18 @@ public class SkillRegistry {
         enabledStatus.put(name, true);
     }
 
+    public void unregister(String skillName) {
+        if (skillName == null || skillName.isBlank()) {
+            return;
+        }
+
+        Skill removed = skills.remove(skillName);
+        enabledStatus.remove(skillName);
+        if (removed != null) {
+            log.info("Unregistered skill: {}", skillName);
+        }
+    }
+
     public Collection<Skill> listAll() {
         return Collections.unmodifiableCollection(new ArrayList<>(skills.values()));
     }

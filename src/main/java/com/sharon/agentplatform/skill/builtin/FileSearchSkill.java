@@ -1,7 +1,9 @@
 package com.sharon.agentplatform.skill.builtin;
 
-import com.sharon.agentplatform.mcp.core.McpClient;
-import com.sharon.agentplatform.mcp.core.McpToolResult;
+import com.sharon.agentplatform.mcp.core.McpTool;
+import com.sharon.agentplatform.mcp.core.McpToolRegistry;
+import com.sharon.agentplatform.mcp.core.McpToolRequest;
+import com.sharon.agentplatform.mcp.core.McpToolResponse;
 import com.sharon.agentplatform.skill.core.Skill;
 import com.sharon.agentplatform.skill.core.SkillContext;
 import com.sharon.agentplatform.skill.core.SkillMetadata;
@@ -14,10 +16,10 @@ import java.util.Map;
 @Component
 public class FileSearchSkill implements Skill {
 
-    private final McpClient mcpClient;
+    private final McpToolRegistry mcpToolRegistry;
 
-    public FileSearchSkill(McpClient mcpClient) {
-        this.mcpClient = mcpClient;
+    public FileSearchSkill(McpToolRegistry mcpToolRegistry) {
+        this.mcpToolRegistry = mcpToolRegistry;
     }
 
     @Override
@@ -49,19 +51,20 @@ public class FileSearchSkill implements Skill {
             return SkillResult.fail("Missing required parameter: keyword");
         }
 
-        McpToolResult mcpResult = mcpClient.callTool(
-                "searchFiles",
-                Map.of("keyword", keyword)
-        );
+        McpTool tool = mcpToolRegistry.get("filesystem.search")
+                .orElseThrow(() -> new IllegalStateException("MCP tool not found: filesystem.search"));
+        McpToolRequest request = new McpToolRequest();
+        request.setParams(Map.of("keyword", keyword));
+        McpToolResponse mcpResult = tool.call(request);
 
         if (!mcpResult.isSuccess()) {
             return SkillResult.fail(mcpResult.getErrorMessage());
         }
 
         return SkillResult.success(Map.of(
-                "mcpTool", "searchFiles",
+                "mcpTool", "filesystem.search",
                 "keyword", keyword,
-                "result", mcpResult.getContent()
+                "result", mcpResult.getResult()
         ));
     }
 }

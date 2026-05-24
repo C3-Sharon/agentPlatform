@@ -1,7 +1,7 @@
 package com.sharon.agentplatform.mcp.filesystem;
 
 import com.sharon.agentplatform.mcp.core.McpClient;
-import com.sharon.agentplatform.mcp.core.McpTool;
+import com.sharon.agentplatform.mcp.core.McpToolMetadata;
 import com.sharon.agentplatform.mcp.core.McpToolResult;
 import org.springframework.stereotype.Component;
 
@@ -22,47 +22,47 @@ public class FileSystemMcpClient implements McpClient {
     private static final long MAX_READ_FILE_SIZE_BYTES = 1024 * 100;
 
     @Override
-    public List<McpTool> listTools() {
+    public List<McpToolMetadata> listTools() {
         return List.of(
-                new McpTool(
+                metadata(
                         "listFiles",
-                        "列出文件",
-                        "列出 workspace 目录下指定路径的文件",
+                        "\u5217\u51fa\u6587\u4ef6",
+                        "\u5217\u51fa workspace \u76ee\u5f55\u4e0b\u6307\u5b9a\u8def\u5f84\u7684\u6587\u4ef6",
                         Map.of(
                                 "type", "object",
                                 "properties", Map.of(
                                         "path", Map.of(
                                                 "type", "string",
-                                                "description", "相对于 workspace 的目录路径，可为空"
+                                                "description", "\u76f8\u5bf9\u4e8e workspace \u7684\u76ee\u5f55\u8def\u5f84\uff0c\u53ef\u4e3a\u7a7a"
                                         )
                                 )
                         )
                 ),
-                new McpTool(
+                metadata(
                         "readFile",
-                        "读取文件",
-                        "读取 workspace 目录下指定文件的文本内容",
+                        "\u8bfb\u53d6\u6587\u4ef6",
+                        "\u8bfb\u53d6 workspace \u76ee\u5f55\u4e0b\u6307\u5b9a\u6587\u4ef6\u7684\u6587\u672c\u5185\u5bb9",
                         Map.of(
                                 "type", "object",
                                 "properties", Map.of(
                                         "path", Map.of(
                                                 "type", "string",
-                                                "description", "相对于 workspace 的文件路径"
+                                                "description", "\u76f8\u5bf9\u4e8e workspace \u7684\u6587\u4ef6\u8def\u5f84"
                                         )
                                 ),
                                 "required", List.of("path")
                         )
                 ),
-                new McpTool(
+                metadata(
                         "searchFiles",
-                        "搜索文件",
-                        "根据文件名关键字搜索 workspace 目录下的文件",
+                        "\u641c\u7d22\u6587\u4ef6",
+                        "\u6839\u636e\u6587\u4ef6\u540d\u5173\u952e\u5b57\u641c\u7d22 workspace \u76ee\u5f55\u4e0b\u7684\u6587\u4ef6",
                         Map.of(
                                 "type", "object",
                                 "properties", Map.of(
                                         "keyword", Map.of(
                                                 "type", "string",
-                                                "description", "文件名关键字"
+                                                "description", "\u6587\u4ef6\u540d\u5173\u952e\u5b57"
                                         )
                                 ),
                                 "required", List.of("keyword")
@@ -89,6 +89,19 @@ public class FileSystemMcpClient implements McpClient {
         } catch (Exception e) {
             return McpToolResult.fail("MCP tool execution failed: " + e.getMessage());
         }
+    }
+
+    private McpToolMetadata metadata(String name,
+                                     String displayName,
+                                     String description,
+                                     Map<String, Object> inputSchema) {
+        McpToolMetadata metadata = new McpToolMetadata();
+        metadata.setName(name);
+        metadata.setDisplayName(displayName);
+        metadata.setDescription(description);
+        metadata.setVersion("1.0.0");
+        metadata.setInputSchema(inputSchema);
+        return metadata;
     }
 
     private McpToolResult listFiles(Map<String, Object> arguments) throws IOException {

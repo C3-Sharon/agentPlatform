@@ -5,7 +5,7 @@ import java.util.Map;
 
 public interface McpClient {
 
-    List<McpTool> listTools();
+    List<McpToolMetadata> listTools();
 
     McpToolResult callTool(String toolName, Map<String, Object> arguments);
 }

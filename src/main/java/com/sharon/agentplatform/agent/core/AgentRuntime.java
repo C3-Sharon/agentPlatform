@@ -8,6 +8,7 @@ import com.sharon.agentplatform.memory.core.ChatMessage;
 import com.sharon.agentplatform.memory.core.LongTermMemory;
 import com.sharon.agentplatform.memory.service.MemoryService;
 import com.sharon.agentplatform.skill.core.SkillContext;
+import com.sharon.agentplatform.skill.core.Skill;
 import com.sharon.agentplatform.skill.core.SkillRegistry;
 import com.sharon.agentplatform.skill.core.SkillResult;
 import org.springframework.stereotype.Component;
@@ -28,6 +29,7 @@ public class AgentRuntime {
     private static final String RESUME_FILE_ID_PARAM = "resumeFileId";
     private static final String JOB_POSTING_ID_PARAM = "jobPostingId";
     private static final Pattern RESUME_FILE_ID_PATTERN = Pattern.compile("(?:resumeFileId|fileId)\\s*[:=\\uFF1A]\\s*([A-Za-z0-9-]+)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern EXPLICIT_SKILL_CALL_CN_PATTERN = Pattern.compile("(?:\\u8bf7)?\\s*(?:\\u8c03\\u7528|\\u4f7f\\u7528)\\s*([A-Za-z0-9_-]+)(?:\\s*\\u6280\\u80fd)?", Pattern.CASE_INSENSITIVE);
     private static final Pattern JOB_POSTING_ID_PATTERN = Pattern.compile("(?:jobPostingId|岗位id|岗位ID)\\s*[:=\\uFF1A]\\s*([^\\s\\uFF0C,\\u3002\\uFF1B;]+)", Pattern.CASE_INSENSITIVE);
     private static final Pattern EXPLICIT_SKILL_CALL_ZH_PATTERN = Pattern.compile("(?:调用|使用)\\s*([A-Za-z0-9_-]+)(?:\\s*技能)?", Pattern.CASE_INSENSITIVE);
     private static final Pattern EXPLICIT_SKILL_CALL_EN_PATTERN = Pattern.compile("\\buse\\s+([A-Za-z0-9_-]+)(?:\\s+skill)?\\b", Pattern.CASE_INSENSITIVE);
@@ -38,19 +40,22 @@ public class AgentRuntime {
     private final ModelService modelService;
     private final LlmSkillDecisionService llmSkillDecisionService;
     private final PendingSkillCallStore pendingSkillCallStore;
+    private final SkillParameterResolver skillParameterResolver;
 
     public AgentRuntime(
             SkillRegistry skillRegistry,
             MemoryService memoryService,
             ModelService modelService,
             LlmSkillDecisionService llmSkillDecisionService,
-            PendingSkillCallStore pendingSkillCallStore
+            PendingSkillCallStore pendingSkillCallStore,
+            SkillParameterResolver skillParameterResolver
     ) {
         this.skillRegistry = skillRegistry;
         this.memoryService = memoryService;
         this.modelService = modelService;
         this.llmSkillDecisionService = llmSkillDecisionService;
         this.pendingSkillCallStore = pendingSkillCallStore;
+        this.skillParameterResolver = skillParameterResolver;
     }
 
     public ChatResponse run(ChatRequest request) {
@@ -115,6 +120,28 @@ public class AgentRuntime {
 
             if (pendingAnswer != null) {
                 answer = pendingAnswer;
+            } else if (detectExplicitSkillCall(message, conversationId, modelId) != null) {
+                ExplicitSkillCall explicitSkillCall = detectExplicitSkillCall(message, conversationId, modelId);
+                trace.add(AgentTrace.success(
+                        AgentStep.INTENT_DETECTION,
+                        "识别为显式 Skill 调用",
+                        Map.of(
+                                "intent", "explicit_skill_call",
+                                "skillName", explicitSkillCall.skillName(),
+                                "params", explicitSkillCall.params()
+                        )
+                ));
+
+                answer = handleExplicitSkillCall(
+                        explicitSkillCall,
+                        message,
+                        conversationId,
+                        modelId,
+                        shortTermMessages,
+                        longTermMemories,
+                        trace,
+                        usedSkills
+                );
             } else if (shouldHandleResumeOptimizeBeforeLlm(message, conversationId, modelId)) {
                 answer = handleResumeOptimizeIntentBeforeLlm(
                         message,
@@ -511,11 +538,12 @@ public class AgentRuntime {
         if (pending.getKnownParams() != null) {
             knownParams.putAll(pending.getKnownParams());
         }
+        knownParams.putAll(skillParameterResolver.extractParams(message));
         knownParams.putAll(extractResumeOptimizeParams(message));
         knownParams.put("conversationId", conversationId);
         knownParams.put("modelId", modelId);
 
-        List<String> missingParams = findMissingResumeOptimizeParams(knownParams);
+        List<String> missingParams = findMissingPendingParams(pending.getSkillName(), knownParams);
 
         trace.add(AgentTrace.success(
                 AgentStep.INTENT_DETECTION,
@@ -572,7 +600,52 @@ public class AgentRuntime {
                 )
         ));
 
-        return buildResumeOptimizeAskAnswer(missingParams);
+        return buildAskAnswer(pending.getSkillName(), missingParams);
+    }
+
+    private List<String> findMissingPendingParams(String skillName, Map<String, Object> params) {
+        return skillRegistry.getSkill(skillName)
+                .map(skill -> skillParameterResolver.findMissingParams(skill.metadata(), params))
+                .orElseGet(() -> RESUME_OPTIMIZE_SKILL.equals(skillName)
+                        ? findMissingResumeOptimizeParams(params)
+                        : List.of());
+    }
+
+    private String preparePendingIfMissingRequiredParams(
+            String skillName,
+            Map<String, Object> params,
+            String conversationId,
+            List<AgentTrace> trace
+    ) {
+        Skill skill = skillRegistry.getSkill(skillName).orElse(null);
+        if (skill == null) {
+            return null;
+        }
+
+        List<String> missingParams = skillParameterResolver.findMissingParams(skill.metadata(), params);
+        if (missingParams.isEmpty()) {
+            return null;
+        }
+
+        PendingSkillCall pending = new PendingSkillCall();
+        pending.setConversationId(conversationId);
+        pending.setSkillName(skillName);
+        pending.setKnownParams(params == null ? new LinkedHashMap<>() : new LinkedHashMap<>(params));
+        pending.setMissingParams(missingParams);
+        pending.setCreatedAt(LocalDateTime.now());
+        pendingSkillCallStore.save(pending);
+
+        trace.add(AgentTrace.success(
+                AgentStep.INTENT_DETECTION,
+                "Skill 参数不足，进入追问",
+                Map.of(
+                        "skillName", skillName,
+                        "knownParams", pending.getKnownParams(),
+                        "missingParams", missingParams
+                )
+        ));
+
+        return buildAskAnswer(skillName, missingParams);
     }
 
     private boolean shouldHandleResumeOptimizeBeforeLlm(
@@ -705,6 +778,23 @@ public class AgentRuntime {
         return "";
     }
 
+    private String buildAskAnswer(String skillName, List<String> missingParams) {
+        if (RESUME_OPTIMIZE_SKILL.equals(skillName)) {
+            return buildResumeOptimizeAskAnswer(missingParams);
+        }
+
+        if (missingParams == null || missingParams.isEmpty()) {
+            return "";
+        }
+
+        if (missingParams.size() == 1) {
+            String param = missingParams.get(0);
+            return "我可以调用 " + skillName + "，但还缺少参数：" + param + "。请按 " + param + "=value 的格式补充。";
+        }
+
+        return "我可以调用 " + skillName + "，但还缺少参数：" + String.join(", ", missingParams) + "。请按 key=value 的格式补充这些参数。";
+    }
+
     private String handleExplicitSkillCall(
             ExplicitSkillCall explicitSkillCall,
             String message,
@@ -717,6 +807,11 @@ public class AgentRuntime {
     ) {
         String skillName = explicitSkillCall.skillName();
         Map<String, Object> params = explicitSkillCall.params();
+
+        String askAnswer = preparePendingIfMissingRequiredParams(skillName, params, conversationId, trace);
+        if (askAnswer != null) {
+            return askAnswer;
+        }
 
         trace.add(AgentTrace.success(
                 AgentStep.SELECT_SKILL,
@@ -899,13 +994,16 @@ public class AgentRuntime {
         }
 
         Map<String, Object> params = extractSimpleParams(message);
-        params.put("conversationId", conversationId);
-        params.put("modelId", modelId);
 
         return new ExplicitSkillCall(skillName, params);
     }
 
     private String extractExplicitSkillName(String message) {
+        Matcher cnMatcher = EXPLICIT_SKILL_CALL_CN_PATTERN.matcher(message);
+        if (cnMatcher.find()) {
+            return cnMatcher.group(1).trim();
+        }
+
         Matcher zhMatcher = EXPLICIT_SKILL_CALL_ZH_PATTERN.matcher(message);
         if (zhMatcher.find()) {
             return zhMatcher.group(1).trim();
@@ -920,19 +1018,7 @@ public class AgentRuntime {
     }
 
     private Map<String, Object> extractSimpleParams(String message) {
-        Map<String, Object> params = new LinkedHashMap<>();
-        Matcher matcher = SIMPLE_PARAM_PATTERN.matcher(message);
-
-        while (matcher.find()) {
-            String key = matcher.group(1).trim();
-            String value = matcher.group(2).trim();
-
-            if (!key.isBlank() && !value.isBlank()) {
-                params.put(key, value);
-            }
-        }
-
-        return params;
+        return skillParameterResolver.extractParams(message);
     }
 
     private record ExplicitSkillCall(String skillName, Map<String, Object> params) {
@@ -1145,6 +1231,11 @@ public class AgentRuntime {
     ) {
         String skillName = decision.getSkillName();
         Map<String, Object> params = buildSkillDecisionParams(decision, conversationId, modelId);
+
+        String askAnswer = preparePendingIfMissingRequiredParams(skillName, params, conversationId, trace);
+        if (askAnswer != null) {
+            return askAnswer;
+        }
 
         trace.add(AgentTrace.success(
                 AgentStep.SELECT_SKILL,

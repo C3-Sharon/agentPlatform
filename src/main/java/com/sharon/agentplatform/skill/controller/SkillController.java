@@ -7,7 +7,9 @@ import com.sharon.agentplatform.skill.core.SkillMetadata;
 import com.sharon.agentplatform.skill.core.SkillRegistry;
 import com.sharon.agentplatform.skill.core.SkillResult;
 import com.sharon.agentplatform.skill.dto.SkillCallRequest;
+import com.sharon.agentplatform.skill.dto.SkillEnableResponse;
 import com.sharon.agentplatform.skill.dto.SkillStatsResponse;
+import com.sharon.agentplatform.skill.service.SkillSettingService;
 import com.sharon.agentplatform.skill.service.SkillStatsService;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,10 +23,14 @@ public class SkillController {
 
     private final SkillRegistry skillRegistry;
     private final SkillStatsService skillStatsService;
+    private final SkillSettingService skillSettingService;
 
-    public SkillController(SkillRegistry skillRegistry, SkillStatsService skillStatsService) {
+    public SkillController(SkillRegistry skillRegistry,
+                           SkillStatsService skillStatsService,
+                           SkillSettingService skillSettingService) {
         this.skillRegistry = skillRegistry;
         this.skillStatsService = skillStatsService;
+        this.skillSettingService = skillSettingService;
     }
 
     @GetMapping
@@ -50,25 +56,13 @@ public class SkillController {
     }
 
     @PostMapping("/{name}/enable")
-    public ApiResponse<Void> enableSkill(@PathVariable String name) {
-        boolean success = skillRegistry.enable(name);
-
-        if (!success) {
-            return ApiResponse.fail("Skill not found: " + name);
-        }
-
-        return ApiResponse.success("Skill enabled: " + name, null);
+    public ApiResponse<SkillEnableResponse> enableSkill(@PathVariable String name) {
+        return ApiResponse.success(skillSettingService.enableSkill(name));
     }
 
     @PostMapping("/{name}/disable")
-    public ApiResponse<Void> disableSkill(@PathVariable String name) {
-        boolean success = skillRegistry.disable(name);
-
-        if (!success) {
-            return ApiResponse.fail("Skill not found: " + name);
-        }
-
-        return ApiResponse.success("Skill disabled: " + name, null);
+    public ApiResponse<SkillEnableResponse> disableSkill(@PathVariable String name) {
+        return ApiResponse.success(skillSettingService.disableSkill(name));
     }
 
     @PostMapping("/{name}/call")

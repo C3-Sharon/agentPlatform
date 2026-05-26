@@ -13,4 +13,6 @@ public interface PluginSkillRepository extends JpaRepository<PluginSkillEntity, 
     List<PluginSkillEntity> findByEnabledTrue();
 
     Optional<PluginSkillEntity> findByPluginIdAndSkillName(String pluginId, String skillName);
+
+    boolean existsBySkillName(String skillName);
 }

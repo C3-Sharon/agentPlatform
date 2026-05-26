@@ -1,5 +1,7 @@
 package com.sharon.agentplatform.skill.core;
 
+import com.sharon.agentplatform.skill.entity.SkillSettingEntity;
+import com.sharon.agentplatform.skill.repository.SkillSettingRepository;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,12 +21,15 @@ public class SkillRegistry {
 
     private final Collection<Skill> skillBeans;
 
+    private final SkillSettingRepository skillSettingRepository;
+
     private final Map<String, Skill> skills = new ConcurrentHashMap<>();
 
     private final Map<String, Boolean> enabledStatus = new ConcurrentHashMap<>();
 
-    public SkillRegistry(Collection<Skill> skillBeans) {
+    public SkillRegistry(Collection<Skill> skillBeans, SkillSettingRepository skillSettingRepository) {
         this.skillBeans = skillBeans;
+        this.skillSettingRepository = skillSettingRepository;
     }
 
     @PostConstruct
@@ -77,7 +82,13 @@ public class SkillRegistry {
     }
 
     public boolean isEnabled(String name) {
-        return enabledStatus.getOrDefault(name, false);
+        if (!enabledStatus.getOrDefault(name, false)) {
+            return false;
+        }
+
+        return skillSettingRepository.findBySkillName(name)
+                .map(SkillSettingEntity::getEnabled)
+                .orElse(true);
     }
 
     public boolean enable(String name) {

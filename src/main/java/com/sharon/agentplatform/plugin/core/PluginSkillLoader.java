@@ -46,10 +46,6 @@ public class PluginSkillLoader {
             throw new BusinessException("Failed to read plugin jar: " + jarPath, e);
         }
 
-        if (skills.isEmpty()) {
-            throw new BusinessException("No Skill implementation found in jar: " + jarPath);
-        }
-
         return skills;
     }
 
@@ -77,10 +73,9 @@ public class PluginSkillLoader {
 
             Object instance = candidateClass.getConstructor().newInstance();
             Skill skill = (Skill) instance;
-            String skillName = skill.metadata().getName();
 
             skills.add(skill);
-            log.info("Loaded plugin skill: {}, {}", skillName, className);
+            log.info("Loaded plugin skill class: {}", className);
         } catch (Throwable e) {
             log.warn("Failed to load plugin class: {}", className, e);
         }

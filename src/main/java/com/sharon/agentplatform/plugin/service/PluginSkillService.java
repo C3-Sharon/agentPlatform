@@ -41,6 +41,7 @@ public class PluginSkillService {
     private final SkillRegistry skillRegistry;
     private final PluginPackageRepository pluginPackageRepository;
     private final PluginSkillRepository pluginSkillRepository;
+    private final PluginSkillValidator pluginSkillValidator;
     private final ObjectMapper objectMapper;
     private final Path pluginDir = Path.of("data", "plugins").toAbsolutePath().normalize();
 
@@ -48,11 +49,13 @@ public class PluginSkillService {
                               SkillRegistry skillRegistry,
                               PluginPackageRepository pluginPackageRepository,
                               PluginSkillRepository pluginSkillRepository,
+                              PluginSkillValidator pluginSkillValidator,
                               ObjectMapper objectMapper) {
         this.pluginSkillLoader = pluginSkillLoader;
         this.skillRegistry = skillRegistry;
         this.pluginPackageRepository = pluginPackageRepository;
         this.pluginSkillRepository = pluginSkillRepository;
+        this.pluginSkillValidator = pluginSkillValidator;
         this.objectMapper = objectMapper;
     }
 
@@ -83,6 +86,7 @@ public class PluginSkillService {
             Files.copy(inputStream, jarPath, StandardCopyOption.REPLACE_EXISTING);
 
             List<Skill> skills = pluginSkillLoader.loadSkillsFromJar(jarPath);
+            pluginSkillValidator.validateForUpload(skills);
             List<LoadedPluginSkill> loadedPluginSkills = registerAndPersistSkills(pluginId, jarPath, skills, true);
 
             pluginPackage.setStatus(STATUS_ENABLED);
@@ -158,6 +162,7 @@ public class PluginSkillService {
     private void loadAndEnablePackage(PluginPackageEntity pluginPackage) {
         Path jarPath = Path.of(pluginPackage.getJarPath()).toAbsolutePath().normalize();
         List<Skill> skills = pluginSkillLoader.loadSkillsFromJar(jarPath);
+        pluginSkillValidator.validateForBootstrap(skills);
         registerAndPersistSkills(pluginPackage.getPluginId(), jarPath, skills, true);
 
         pluginPackage.setStatus(STATUS_ENABLED);

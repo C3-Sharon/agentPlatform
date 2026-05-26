@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Agent Platform Console</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #172033;
+      --muted: #667085;
+      --line: #d9dee7;
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --danger: #dc2626;
+      --code-bg: #111827;
+      --code-text: #d1d5db;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 24px;
+      background: #101828;
+      color: #ffffff;
+      border-bottom: 1px solid #000000;
+    }
+
+    header h1 { margin: 0; font-size: 22px; font-weight: 700; }
+    header span { color: #cbd5e1; font-size: 13px; }
+
+    nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 24px;
+      background: #ffffff;
+      border-bottom: 1px solid var(--line);
+    }
+
+    nav a {
+      color: #1f2937;
+      text-decoration: none;
+      font-size: 13px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #f9fafb;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 420px;
+      gap: 16px;
+      padding: 18px 24px 28px;
+      align-items: start;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+    }
+
+    .card h2 { margin: 0 0 12px; font-size: 17px; }
+
+    .section {
+      display: grid;
+      gap: 10px;
+      padding: 12px 0;
+      border-top: 1px solid #edf0f5;
+    }
+
+    .section:first-of-type { border-top: 0; padding-top: 0; }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    input, textarea {
+      width: 100%;
+      border: 1px solid #cfd6e2;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font: inherit;
+      font-size: 13px;
+      background: #ffffff;
+      color: var(--text);
+    }
+
+    textarea { min-height: 86px; resize: vertical; }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    button {
+      border: 1px solid var(--primary);
+      background: var(--primary);
+      color: #ffffff;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    button:hover { background: var(--primary-dark); }
+    button.secondary { background: #ffffff; color: var(--primary); }
+    button.secondary:hover { background: #eff6ff; }
+    button.danger { border-color: var(--danger); background: var(--danger); }
+
+    .hint { color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+    .response {
+      position: sticky;
+      top: 112px;
+      min-height: 520px;
+    }
+
+    .response h2 {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    #result {
+      min-height: 520px;
+      max-height: calc(100vh - 210px);
+      overflow: auto;
+      margin: 0;
+      padding: 14px;
+      border-radius: 8px;
+      background: var(--code-bg);
+      color: var(--code-text);
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    @media (max-width: 1180px) {
+      main { grid-template-columns: 1fr; }
+      .response { position: static; }
+    }
+
+    @media (max-width: 780px) {
+      header, nav, main { padding-left: 14px; padding-right: 14px; }
+      .grid, .row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AI Agent Platform Console</h1>
+    <span>Static HTML + CSS + JavaScript Console</span>
+  </header>
+
+  <nav>
+    <a href="#models">模型</a>
+    <a href="#skills">Skill</a>
+    <a href="#plugins">插件</a>
+    <a href="#resume">简历优化</a>
+    <a href="#mcp">MCP</a>
+    <a href="#external-mcp">External MCP</a>
+    <a href="#memory">记忆与历史</a>
+    <a href="#chat">Agent 对话</a>
+  </nav>
+
+  <main>
+    <div class="grid">
+      <section id="models" class="card">
+        <h2>模型管理 / Model Console</h2>
+
+        <div class="section">
+          <div class="actions">
+            <button onclick="getModels()">获取模型列表</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <label>modelId
+            <input id="modelDetailId" value="siliconflow-deepseek" />
+          </label>
+          <div class="actions">
+            <button onclick="getModelDetail()">获取单模型详情</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="row">
+            <label>conversationId
+              <input id="modelChatConversationId" value="web-model-demo" />
+            </label>
+            <label>modelId
+              <input id="modelChatModelId" value="siliconflow-deepseek" />
+            </label>
+          </div>
+          <label>message
+            <textarea id="modelChatMessage">请用一句话介绍你自己。</textarea>
+          </label>
+          <div class="actions">
+            <button onclick="modelChat()">普通聊天测试</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="row">
+            <label>vision modelId
+              <input id="visionModelId" value="siliconflow-qwen-vl" />
+            </label>
+            <label>image
+              <input id="visionImage" type="file" accept="image/*" />
+            </label>
+          </div>
+          <label>message
+            <textarea id="visionMessage">请描述这张图片，并读取其中的英文文字。</textarea>
+          </label>
+          <div class="actions">
+            <button onclick="visionChat()">Vision Chat 图片测试</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="skills" class="card">
+        <h2>Skill 市场 / Skill Market</h2>
+
+        <div class="section">
+          <div class="actions">
+            <button onclick="getSkills()">获取 Skill 列表</button>
+            <button onclick="getSkillStats()">获取 Skill 调用统计</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <label>skillName
+            <input id="skillName" value="calculator" />
+          </label>
+          <div class="actions">
+            <button class="danger" onclick="disableSkill()">禁用 Skill</button>
+            <button onclick="enableSkill()">启用 Skill</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <label>expression
+            <input id="calculatorExpression" value="1 + 2 * 3" />
+          </label>
+          <div class="actions">
+            <button onclick="callCalculator()">调用 calculator</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="plugins" class="card">
+        <h2>插件市场 / Plugin Market</h2>
+        <div class="hint">此处用于上传外部 Skill Jar 插件，不用于上传简历、图片等业务文件。This section uploads external Skill Jar plugins, not business files such as resumes or images.</div>
+
+        <div class="section">
+          <label>pluginJar
+            <input id="pluginJar" type="file" accept=".jar" />
+          </label>
+          <div class="actions">
+            <button onclick="uploadPlugin()">上传插件 Jar</button>
+            <button class="secondary" onclick="getPlugins()">获取插件列表</button>
+          </div>
+          <div class="hint">如果上传失败提示 skillName already exists，说明同名插件可能已经安装。</div>
+        </div>
+
+        <div class="section">
+          <label>pluginId
+            <input id="pluginId" placeholder="上传或列表中复制 pluginId" />
+          </label>
+          <div class="actions">
+            <button class="danger" onclick="disablePlugin()">禁用插件</button>
+            <button onclick="enablePlugin()">启用插件</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="resume" class="card">
+        <h2>简历优化 / Resume Optimize</h2>
+        <div class="hint">该模块用于稳定演示简历优化业务流程：上传简历、读取岗位网页、同步/异步优化、查询任务状态。</div>
+
+        <div class="section">
+          <label>conversationId
+            <input id="resumeConversationId" value="web-resume-demo" />
+          </label>
+          <label>resumeFile
+            <input id="resumeFileInput" type="file" accept=".pdf,.doc,.docx" />
+          </label>
+          <div class="actions">
+            <button onclick="uploadResumeAttachment()">上传简历</button>
+            <button class="secondary" onclick="getConversationResources()">查询会话资源</button>
+          </div>
+          <div class="hint">上传成功后，请从响应中的 resourceId 或 metadata.resumeFileId 复制 resumeFileId。</div>
+        </div>
+
+        <div class="section">
+          <label>jobUrl
+            <input id="resumeJobUrl" placeholder="https://example.com/job" />
+          </label>
+          <div class="actions">
+            <button onclick="readJobPosting()">读取岗位网页</button>
+          </div>
+          <div class="hint">读取成功后，请从响应中复制 jobPostingId。当前后端 DTO 字段名为 jobUrl。</div>
+        </div>
+
+        <div class="section">
+          <div class="row">
+            <label>modelId
+              <input id="resumeModelId" value="siliconflow-deepseek" />
+            </label>
+            <label>resumeFileId
+              <input id="resumeFileId" placeholder="从上传响应复制 resumeFileId" />
+            </label>
+          </div>
+          <label>jobPostingId
+            <input id="resumeJobPostingId" placeholder="从岗位读取响应复制 jobPostingId" />
+          </label>
+          <div class="actions">
+            <button onclick="syncResumeOptimize()">同步简历优化</button>
+            <button onclick="asyncResumeOptimize()">异步简历优化</button>
+          </div>
+          <div class="hint">异步接口会返回 taskId，请复制 taskId 到下方查询任务状态。</div>
+        </div>
+
+        <div class="section">
+          <label>taskId
+            <input id="resumeTaskId" placeholder="异步优化返回的 taskId" />
+          </label>
+          <div class="actions">
+            <button onclick="getResumeTaskStatus()">查询任务状态</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="mcp" class="card">
+        <h2>MCP 工具 / MCP Console</h2>
+
+        <div class="section">
+          <div class="actions">
+            <button onclick="getMcpTools()">获取 MCP 工具列表</button>
+            <button onclick="mcpRpcList()">JSON-RPC tools/list</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <label>keyword
+            <input id="mcpKeyword" value="README" />
+          </label>
+          <div class="actions">
+            <button onclick="mcpFilesystemSearch()">调用 filesystem.search</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <label>limit
+            <input id="mcpRunLimit" type="number" value="5" min="1" max="50" />
+          </label>
+          <div class="actions">
+            <button onclick="mcpRecentRuns()">调用 database.recent_agent_runs</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="external-mcp" class="card">
+        <h2>外部 MCP / External MCP</h2>
+
+        <div class="section">
+          <div class="row">
+            <label>name
+              <input id="externalName" value="external-demo-web" />
+            </label>
+            <label>baseUrl
+              <input id="externalBaseUrl" value="http://localhost:8090/mcp/rpc" />
+            </label>
+          </div>
+          <div class="actions">
+            <button onclick="registerExternalMcp()">注册外部 MCP Server</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <label>serverId
+            <input id="externalServerId" placeholder="注册或列表中复制 serverId" />
+          </label>
+          <div class="actions">
+            <button onclick="syncExternalTools()">同步外部工具</button>
+            <button class="secondary" onclick="getExternalServer()">查看外部 MCP Server</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="row">
+            <label>toolId
+              <input id="externalToolId" placeholder="外部工具 toolId" />
+            </label>
+            <label>text
+              <input id="externalToolText" value="hello from web console" />
+            </label>
+          </div>
+          <div class="actions">
+            <button onclick="callExternalTool()">调用外部工具</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="memory" class="card">
+        <h2>记忆与运行历史 / Memory & Runs</h2>
+
+        <div class="section">
+          <label>conversationId
+            <input id="memoryConversationId" value="web-memory-demo" />
+          </label>
+          <div class="actions">
+            <button onclick="memoryFirstTurn()">记忆测试第一轮</button>
+            <button onclick="memorySecondTurn()">记忆测试第二轮</button>
+            <button class="secondary" onclick="getConversationMessages()">查询会话消息</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="actions">
+            <button onclick="getAgentRuns()">获取 Agent Runs</button>
+          </div>
+        </div>
+
+        <div class="section">
+          <label>runId
+            <input id="runId" placeholder="从 Agent Runs 中复制 runId" />
+          </label>
+          <div class="actions">
+            <button onclick="getRunDetail()">获取 Run 详情</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="chat" class="card">
+        <h2>Agent 对话 / Chat Agent</h2>
+
+        <div class="section">
+          <div class="row">
+            <label>conversationId
+              <input id="chatConversationId" value="web-chat-demo" />
+            </label>
+            <label>modelId
+              <input id="chatModelId" value="siliconflow-deepseek" />
+            </label>
+          </div>
+          <label>message
+            <textarea id="chatMessage">你好，请介绍一下你能做什么。</textarea>
+          </label>
+          <div class="row">
+            <label>resumeFileId
+              <input id="chatResumeFileId" placeholder="从简历上传响应中复制 resumeFileId" />
+            </label>
+            <label>jobPostingId
+              <input id="chatJobPostingId" placeholder="从岗位读取响应中复制 jobPostingId" />
+            </label>
+          </div>
+          <div class="hint">追问演示：先发送自然语言请求，让 Agent 发现缺少 resumeFileId/jobPostingId；再补充参数，Agent 会继续执行 resume_optimize。</div>
+          <div class="actions">
+            <button onclick="sendChat()">发送</button>
+            <button class="secondary" onclick="setChatMessage('帮我计算 10 * 24 + 6')">计算任务</button>
+            <button class="secondary" onclick="setChatMessage('请调用 text_reverse 技能')">显式 Skill 调用</button>
+            <button class="secondary" onclick="setChatMessage('text=hello skill')">补参数</button>
+            <button onclick="resumePendingAsk()">简历优化追问</button>
+            <button onclick="resumePendingFill()">补充简历参数</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <aside class="card response">
+      <h2>
+        <span>响应结果 / Response</span>
+        <button class="secondary" onclick="clearResult()">清空</button>
+      </h2>
+      <pre id="result">点击左侧按钮后，响应会显示在这里。</pre>
+    </aside>
+  </main>
+
+  <script>
+    const BASE_URL = "";
+
+    function prettyJson(data) {
+      if (typeof data === "string") {
+        return data;
+      }
+      return JSON.stringify(data, null, 2);
+    }
+
+    function showResult(title, data) {
+      document.getElementById("result").textContent = title + "\n\n" + prettyJson(data);
+    }
+
+    function showError(title, error) {
+      document.getElementById("result").textContent = title + "\n\n" + prettyJson(error);
+    }
+
+    function clearResult() {
+      document.getElementById("result").textContent = "";
+    }
+
+    async function requestJson(method, url, body) {
+      const options = { method, headers: {} };
+      if (body !== undefined) {
+        options.headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(body);
+      }
+      const response = await fetch(BASE_URL + url, options);
+      const contentType = response.headers.get("content-type") || "";
+      let data = contentType.includes("application/json") ? await response.json() : await response.text();
+      if (!response.ok) {
+        throw { status: response.status, body: data };
+      }
+      return data;
+    }
+
+    async function requestForm(url, formData) {
+      const response = await fetch(BASE_URL + url, { method: "POST", body: formData });
+      const contentType = response.headers.get("content-type") || "";
+      let data = contentType.includes("application/json") ? await response.json() : await response.text();
+      if (!response.ok) {
+        throw { status: response.status, body: data };
+      }
+      return data;
+    }
+
+    function value(id) {
+      return document.getElementById(id).value.trim();
+    }
+
+    function requireValue(id, label) {
+      const current = value(id);
+      if (!current) {
+        throw label + " 不能为空";
+      }
+      return current;
+    }
+
+    function requireNumber(id, label) {
+      const current = requireValue(id, label);
+      const parsed = Number(current);
+      if (!Number.isFinite(parsed)) {
+        throw label + " 必须是数字";
+      }
+      return parsed;
+    }
+
+    async function run(title, fn) {
+      showResult(title, "Loading...");
+      try {
+        const data = await fn();
+        showResult(title, data);
+      } catch (error) {
+        showError(title + " failed", error);
+      }
+    }
+
+    function getModels() {
+      return run("GET /api/models", () => requestJson("GET", "/api/models"));
+    }
+
+    function getModelDetail() {
+      const modelId = encodeURIComponent(requireValue("modelDetailId", "modelId"));
+      return run("GET /api/models/" + modelId, () => requestJson("GET", "/api/models/" + modelId));
+    }
+
+    function modelChat() {
+      const body = {
+        conversationId: requireValue("modelChatConversationId", "conversationId"),
+        modelId: requireValue("modelChatModelId", "modelId"),
+        message: requireValue("modelChatMessage", "message")
+      };
+      return run("POST /api/chat", () => requestJson("POST", "/api/chat", body));
+    }
+
+    function visionChat() {
+      return run("POST /api/models/vision-chat", () => {
+        const imageInput = document.getElementById("visionImage");
+        if (!imageInput.files || imageInput.files.length === 0) {
+          throw "请选择一张图片。";
+        }
+        const formData = new FormData();
+        formData.append("modelId", requireValue("visionModelId", "modelId"));
+        formData.append("message", requireValue("visionMessage", "message"));
+        formData.append("image", imageInput.files[0]);
+        return requestForm("/api/models/vision-chat", formData);
+      });
+    }
+
+    function getSkills() {
+      return run("GET /api/skills", () => requestJson("GET", "/api/skills"));
+    }
+
+    function getSkillStats() {
+      return run("GET /api/skills/stats", () => requestJson("GET", "/api/skills/stats"));
+    }
+
+    function disableSkill() {
+      const skillName = encodeURIComponent(requireValue("skillName", "skillName"));
+      return run("POST /api/skills/" + skillName + "/disable", () => requestJson("POST", "/api/skills/" + skillName + "/disable"));
+    }
+
+    function enableSkill() {
+      const skillName = encodeURIComponent(requireValue("skillName", "skillName"));
+      return run("POST /api/skills/" + skillName + "/enable", () => requestJson("POST", "/api/skills/" + skillName + "/enable"));
+    }
+
+    function callCalculator() {
+      const body = { params: { expression: requireValue("calculatorExpression", "expression") } };
+      return run("POST /api/skills/calculator/call", () => requestJson("POST", "/api/skills/calculator/call", body));
+    }
+
+    function uploadPlugin() {
+      return run("POST /api/plugins/skills/upload", () => {
+        const input = document.getElementById("pluginJar");
+        if (!input.files || input.files.length === 0) {
+          throw "请选择插件 Jar 文件。";
+        }
+        const formData = new FormData();
+        formData.append("file", input.files[0]);
+        return requestForm("/api/plugins/skills/upload", formData);
+      });
+    }
+
+    function getPlugins() {
+      return run("GET /api/plugins", () => requestJson("GET", "/api/plugins"));
+    }
+
+    function disablePlugin() {
+      const pluginId = encodeURIComponent(requireValue("pluginId", "pluginId"));
+      return run("POST /api/plugins/" + pluginId + "/disable", () => requestJson("POST", "/api/plugins/" + pluginId + "/disable"));
+    }
+
+    function enablePlugin() {
+      const pluginId = encodeURIComponent(requireValue("pluginId", "pluginId"));
+      return run("POST /api/plugins/" + pluginId + "/enable", () => requestJson("POST", "/api/plugins/" + pluginId + "/enable"));
+    }
+
+    function uploadResumeAttachment() {
+      return run("POST /api/conversations/{conversationId}/attachments", () => {
+        const conversationId = requireValue("resumeConversationId", "conversationId");
+        const input = document.getElementById("resumeFileInput");
+        if (!input.files || input.files.length === 0) {
+          throw "请选择简历 PDF/DOCX 文件。";
+        }
+        const formData = new FormData();
+        formData.append("file", input.files[0]);
+        formData.append("purpose", "resume");
+        return requestForm("/api/conversations/" + encodeURIComponent(conversationId) + "/attachments", formData);
+      });
+    }
+
+    function getConversationResources() {
+      const conversationId = encodeURIComponent(requireValue("resumeConversationId", "conversationId"));
+      return run("GET /api/conversations/" + conversationId + "/resources", () => requestJson("GET", "/api/conversations/" + conversationId + "/resources"));
+    }
+
+    function readJobPosting() {
+      const body = { jobUrl: requireValue("resumeJobUrl", "jobUrl") };
+      return run("POST /api/resume/job-postings/read", () => requestJson("POST", "/api/resume/job-postings/read", body));
+    }
+
+    function buildResumeOptimizeBody() {
+      return {
+        conversationId: requireValue("resumeConversationId", "conversationId"),
+        modelId: requireValue("resumeModelId", "modelId"),
+        resumeFileId: requireValue("resumeFileId", "resumeFileId"),
+        jobPostingId: requireNumber("resumeJobPostingId", "jobPostingId")
+      };
+    }
+
+    function syncResumeOptimize() {
+      return run("POST /api/resume/optimize", () => requestJson("POST", "/api/resume/optimize", buildResumeOptimizeBody()));
+    }
+
+    function asyncResumeOptimize() {
+      return run("POST /api/resume/optimize/async", () => requestJson("POST", "/api/resume/optimize/async", buildResumeOptimizeBody()));
+    }
+
+    function getResumeTaskStatus() {
+      const taskId = encodeURIComponent(requireValue("resumeTaskId", "taskId"));
+      return run("GET /api/resume/tasks/" + taskId, () => requestJson("GET", "/api/resume/tasks/" + taskId));
+    }
+
+    function getMcpTools() {
+      return run("GET /api/mcp/tools", () => requestJson("GET", "/api/mcp/tools"));
+    }
+
+    function mcpRpcList() {
+      const body = { jsonrpc: "2.0", id: 1, method: "tools/list" };
+      return run("POST /api/mcp/rpc tools/list", () => requestJson("POST", "/api/mcp/rpc", body));
+    }
+
+    function mcpFilesystemSearch() {
+      const body = {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: {
+          name: "filesystem.search",
+          arguments: { keyword: requireValue("mcpKeyword", "keyword") }
+        }
+      };
+      return run("POST /api/mcp/rpc filesystem.search", () => requestJson("POST", "/api/mcp/rpc", body));
+    }
+
+    function mcpRecentRuns() {
+      const limit = requireNumber("mcpRunLimit", "limit");
+      const body = {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "database.recent_agent_runs",
+          arguments: { limit }
+        }
+      };
+      return run("POST /api/mcp/rpc database.recent_agent_runs", () => requestJson("POST", "/api/mcp/rpc", body));
+    }
+
+    function registerExternalMcp() {
+      const body = {
+        name: requireValue("externalName", "name"),
+        baseUrl: requireValue("externalBaseUrl", "baseUrl"),
+        enabled: true
+      };
+      return run("POST /api/mcp/external/servers", () => requestJson("POST", "/api/mcp/external/servers", body));
+    }
+
+    function syncExternalTools() {
+      const serverId = encodeURIComponent(requireValue("externalServerId", "serverId"));
+      return run("POST /api/mcp/external/servers/" + serverId + "/sync-tools", () => requestJson("POST", "/api/mcp/external/servers/" + serverId + "/sync-tools"));
+    }
+
+    function getExternalServer() {
+      const serverId = encodeURIComponent(requireValue("externalServerId", "serverId"));
+      return run("GET /api/mcp/external/servers/" + serverId, () => requestJson("GET", "/api/mcp/external/servers/" + serverId));
+    }
+
+    function callExternalTool() {
+      const toolId = encodeURIComponent(requireValue("externalToolId", "toolId"));
+      const body = { arguments: { text: requireValue("externalToolText", "text") } };
+      return run("POST /api/mcp/external/tools/" + toolId + "/call", () => requestJson("POST", "/api/mcp/external/tools/" + toolId + "/call", body));
+    }
+
+    function memoryFirstTurn() {
+      const body = {
+        conversationId: requireValue("memoryConversationId", "conversationId"),
+        modelId: "siliconflow-deepseek",
+        message: "请记住，我正在做 AI Agent 平台考核。"
+      };
+      return run("POST /api/chat memory first turn", () => requestJson("POST", "/api/chat", body));
+    }
+
+    function memorySecondTurn() {
+      const body = {
+        conversationId: requireValue("memoryConversationId", "conversationId"),
+        modelId: "siliconflow-deepseek",
+        message: "我刚才说我在做什么？"
+      };
+      return run("POST /api/chat memory second turn", () => requestJson("POST", "/api/chat", body));
+    }
+
+    function getConversationMessages() {
+      const conversationId = encodeURIComponent(requireValue("memoryConversationId", "conversationId"));
+      return run("GET /api/memory/conversations/" + conversationId + "/messages", () => requestJson("GET", "/api/memory/conversations/" + conversationId + "/messages"));
+    }
+
+    function getAgentRuns() {
+      return run("GET /api/agent/runs", () => requestJson("GET", "/api/agent/runs"));
+    }
+
+    function getRunDetail() {
+      const runId = encodeURIComponent(requireValue("runId", "runId"));
+      return run("GET /api/agent/runs/" + runId, () => requestJson("GET", "/api/agent/runs/" + runId));
+    }
+
+    function sendChat() {
+      const body = {
+        conversationId: requireValue("chatConversationId", "conversationId"),
+        modelId: requireValue("chatModelId", "modelId"),
+        message: requireValue("chatMessage", "message")
+      };
+      return run("POST /api/chat", () => requestJson("POST", "/api/chat", body));
+    }
+
+    function setChatMessage(message) {
+      document.getElementById("chatMessage").value = message;
+    }
+
+    function resumePendingAsk() {
+      const body = {
+        conversationId: requireValue("chatConversationId", "conversationId"),
+        modelId: requireValue("chatModelId", "modelId"),
+        message: "帮我优化简历并给出面试准备建议"
+      };
+      document.getElementById("chatMessage").value = body.message;
+      return run("POST /api/chat resume pending ask", () => requestJson("POST", "/api/chat", body));
+    }
+
+    function resumePendingFill() {
+      const resumeFileId = requireValue("chatResumeFileId", "resumeFileId");
+      const jobPostingId = requireValue("chatJobPostingId", "jobPostingId");
+      const message = "resumeFileId=" + resumeFileId + ", jobPostingId=" + jobPostingId;
+      document.getElementById("chatMessage").value = message;
+      const body = {
+        conversationId: requireValue("chatConversationId", "conversationId"),
+        modelId: requireValue("chatModelId", "modelId"),
+        message
+      };
+      return run("POST /api/chat resume pending fill", () => requestJson("POST", "/api/chat", body));
+    }
+  </script>
+</body>
+</html>

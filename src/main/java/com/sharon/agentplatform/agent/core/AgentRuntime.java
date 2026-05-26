@@ -620,6 +620,12 @@ public class AgentRuntime {
         knownParams.putAll(extractResumeOptimizeParams(message));
         knownParams.put("conversationId", conversationId);
         knownParams.put("modelId", modelId);
+        inferPendingSingleRequiredStringParam(
+                pending.getSkillName(),
+                message,
+                knownParams,
+                trace
+        );
 
         List<String> missingParams = findMissingPendingParams(pending.getSkillName(), knownParams);
 
@@ -885,6 +891,12 @@ public class AgentRuntime {
     ) {
         String skillName = explicitSkillCall.skillName();
         Map<String, Object> params = explicitSkillCall.params();
+        inferExplicitSingleRequiredStringParam(
+                skillName,
+                message,
+                params,
+                trace
+        );
 
         String askAnswer = preparePendingIfMissingRequiredParams(skillName, params, conversationId, trace);
         if (askAnswer != null) {
@@ -917,6 +929,65 @@ public class AgentRuntime {
                 longTermMemories,
                 trace
         );
+    }
+
+    private void inferExplicitSingleRequiredStringParam(
+            String skillName,
+            String message,
+            Map<String, Object> params,
+            List<AgentTrace> trace
+    ) {
+        Skill skill = skillRegistry.getSkill(skillName).orElse(null);
+        if (skill == null) {
+            return;
+        }
+
+        skillParameterResolver.inferSingleRequiredStringParam(
+                skillName,
+                skill.metadata(),
+                message,
+                params
+        ).ifPresent(inferredParam -> {
+            params.put(inferredParam.name(), inferredParam.value());
+            trace.add(AgentTrace.success(
+                    AgentStep.INTENT_DETECTION,
+                    "\u4ece\u81ea\u7136\u8bed\u8a00\u8865\u5168\u5355\u5b57\u7b26\u4e32\u53c2\u6570",
+                    Map.of(
+                            "skillName", skillName,
+                            "paramName", inferredParam.name(),
+                            "paramValue", inferredParam.value()
+                    )
+            ));
+        });
+    }
+
+    private void inferPendingSingleRequiredStringParam(
+            String skillName,
+            String message,
+            Map<String, Object> params,
+            List<AgentTrace> trace
+    ) {
+        Skill skill = skillRegistry.getSkill(skillName).orElse(null);
+        if (skill == null) {
+            return;
+        }
+
+        skillParameterResolver.inferPendingSingleRequiredStringParam(
+                skill.metadata(),
+                message,
+                params
+        ).ifPresent(inferredParam -> {
+            params.put(inferredParam.name(), inferredParam.value());
+            trace.add(AgentTrace.success(
+                    AgentStep.INTENT_DETECTION,
+                    "\u4ece\u81ea\u7136\u8bed\u8a00\u8865\u5168\u5355\u5b57\u7b26\u4e32\u53c2\u6570",
+                    Map.of(
+                            "skillName", skillName,
+                            "paramName", inferredParam.name(),
+                            "paramValue", inferredParam.value()
+                    )
+            ));
+        });
     }
 
     private SkillResult callSkillWithTrace(

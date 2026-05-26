@@ -74,6 +74,19 @@ agent-platform:
       enabled: true
       capabilities: ["chat", "reasoning"]
 
+    - id: siliconflow-qwen-vl
+      display-name: Qwen3 VL 32B via SiliconFlow
+      provider: siliconflow
+      type: openai-compatible
+      base-url: https://api.siliconflow.cn
+      model-name: Qwen/Qwen3-VL-32B-Instruct
+      api-key: ${OPENAI_API_KEY:}
+      enabled: true
+      capabilities:
+        - chat
+        - vision
+        - multimodal
+
     - id: local-ollama
       display-name: Local Ollama Model
       provider: ollama

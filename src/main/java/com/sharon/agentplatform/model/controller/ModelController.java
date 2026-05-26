@@ -5,8 +5,11 @@ import com.sharon.agentplatform.model.core.ModelConfig;
 import com.sharon.agentplatform.model.core.ModelConfigStore;
 import com.sharon.agentplatform.model.dto.ModelChatRequest;
 import com.sharon.agentplatform.model.dto.ModelChatResponse;
+import com.sharon.agentplatform.model.dto.VisionChatResponse;
 import com.sharon.agentplatform.model.service.ModelService;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -52,6 +55,15 @@ public class ModelController {
                 request.getMessage()
         );
         return ApiResponse.success(new ModelChatResponse(answer));
+    }
+
+    @PostMapping(value = "/vision-chat", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<VisionChatResponse> visionChat(
+            @RequestParam String modelId,
+            @RequestParam String message,
+            @RequestParam MultipartFile image
+    ) {
+        return ApiResponse.success(modelService.visionChat(modelId, message, image));
     }
 
     private Map<String, Object> toModelView(ModelConfig config) {

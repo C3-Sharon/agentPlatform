@@ -1,5 +1,6 @@
 package com.sharon.agentplatform.model.core;
 
+import com.sharon.agentplatform.common.exception.BusinessException;
 import org.springframework.stereotype.Component;
 
 import java.util.Collection;
@@ -34,13 +35,13 @@ public class ModelRouter {
                 .orElseThrow(() -> new IllegalArgumentException("Model not found: " + actualModelId));
 
         if (!config.isEnabled()) {
-            throw new IllegalStateException("Model is disabled: " + actualModelId);
+            throw new BusinessException("Model is disabled: " + actualModelId);
         }
 
-        ModelClient client = modelClients.get(config.getProvider());
+        ModelClient client = modelClients.get(config.getClientProvider());
 
         if (client == null) {
-            throw new IllegalStateException("No ModelClient found for provider: " + config.getProvider());
+            throw new IllegalStateException("No ModelClient found for model type: " + config.getType());
         }
 
         return client.chat(config, systemPrompt, userMessage);

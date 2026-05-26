@@ -1,5 +1,6 @@
 package com.sharon.agentplatform.model.service;
 
+import com.sharon.agentplatform.common.exception.BusinessException;
 import com.sharon.agentplatform.common.exception.ModelCallException;
 import com.sharon.agentplatform.model.core.ModelRouter;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,8 @@ public class ModelService {
 
         try {
             return modelRouter.chat(modelId, systemPrompt, userMessage);
+        } catch (BusinessException exception) {
+            throw exception;
         } catch (Exception exception) {
             throw new ModelCallException("Model call failed for modelId: " + modelId, exception);
         }

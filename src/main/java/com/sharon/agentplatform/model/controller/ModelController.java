@@ -36,6 +36,13 @@ public class ModelController {
         return ApiResponse.success(models);
     }
 
+    @GetMapping("/{modelId}")
+    public ApiResponse<Map<String, Object>> getModel(@PathVariable String modelId) {
+        return modelConfigStore.getById(modelId)
+                .map(config -> ApiResponse.success(toModelView(config)))
+                .orElseGet(() -> ApiResponse.fail("Model not found: " + modelId));
+    }
+
     @PostMapping("/test-chat")
     public ApiResponse<ModelChatResponse> testChat(
             @RequestBody ModelChatRequest request
@@ -50,8 +57,10 @@ public class ModelController {
     private Map<String, Object> toModelView(ModelConfig config) {
         return Map.of(
                 "id", config.getId(),
-                "provider", config.getProvider().name(),
                 "displayName", config.getDisplayName(),
+                "provider", config.getProvider(),
+                "type", config.getType(),
+                "capabilities", config.getCapabilities(),
                 "modelName", config.getModelName() == null ? "" : config.getModelName(),
                 "baseUrl", config.getBaseUrl() == null ? "" : config.getBaseUrl(),
                 "enabled", config.isEnabled()

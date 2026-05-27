@@ -3,6 +3,7 @@ package com.sharon.agentplatform.plugin.controller;
 import com.sharon.agentplatform.common.ApiResponse;
 import com.sharon.agentplatform.plugin.core.LoadedPluginSkill;
 import com.sharon.agentplatform.plugin.dto.PluginPackageResponse;
+import com.sharon.agentplatform.plugin.dto.PluginRuntimeResponse;
 import com.sharon.agentplatform.plugin.dto.PluginUploadResponse;
 import com.sharon.agentplatform.plugin.service.PluginSkillService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -39,6 +40,11 @@ public class PluginSkillController {
     @GetMapping
     public ApiResponse<List<PluginPackageResponse>> listPlugins() {
         return ApiResponse.success(pluginSkillService.listPlugins());
+    }
+
+    @GetMapping("/runtime")
+    public ApiResponse<List<PluginRuntimeResponse>> listPluginRuntimes() {
+        return ApiResponse.success(pluginSkillService.listPluginRuntimes());
     }
 
     @PostMapping("/{pluginId}/enable")

@@ -23,30 +23,44 @@ public class PluginSkillLoader {
     private static final Logger log = LoggerFactory.getLogger(PluginSkillLoader.class);
 
     public List<Skill> loadSkillsFromJar(Path jarPath) {
+        PluginLoadResult result = loadWithClassLoader(jarPath);
+        return result.getLoadedSkills();
+    }
+
+    public PluginLoadResult loadWithClassLoader(Path jarPath) {
         if (jarPath == null || !Files.exists(jarPath)) {
             throw new BusinessException("Plugin jar does not exist: " + jarPath);
         }
 
         List<Skill> skills = new ArrayList<>();
+        URLClassLoader classLoader = null;
 
         try {
             URL jarUrl = jarPath.toUri().toURL();
-            URLClassLoader classLoader = new URLClassLoader(
+            classLoader = new URLClassLoader(
                     new URL[]{jarUrl},
                     Thread.currentThread().getContextClassLoader()
             );
+            URLClassLoader pluginClassLoader = classLoader;
 
             try (JarFile jarFile = new JarFile(jarPath.toFile())) {
                 jarFile.stream()
                         .filter(this::isClassEntry)
                         .map(this::toClassName)
-                        .forEach(className -> loadSkillClass(classLoader, className, skills));
+                        .forEach(className -> loadSkillClass(pluginClassLoader, className, skills));
             }
-        } catch (IOException e) {
-            throw new BusinessException("Failed to read plugin jar: " + jarPath, e);
-        }
 
-        return skills;
+            PluginLoadResult result = new PluginLoadResult();
+            result.setClassLoader(classLoader);
+            result.setLoadedSkills(skills);
+            return result;
+        } catch (IOException e) {
+            closeQuietly(classLoader);
+            throw new BusinessException("Failed to read plugin jar: " + jarPath, e);
+        } catch (RuntimeException e) {
+            closeQuietly(classLoader);
+            throw e;
+        }
     }
 
     private boolean isClassEntry(JarEntry entry) {
@@ -78,6 +92,17 @@ public class PluginSkillLoader {
             log.info("Loaded plugin skill class: {}", className);
         } catch (Throwable e) {
             log.warn("Failed to load plugin class: {}", className, e);
+        }
+    }
+
+    private void closeQuietly(URLClassLoader classLoader) {
+        if (classLoader == null) {
+            return;
+        }
+        try {
+            classLoader.close();
+        } catch (IOException exception) {
+            log.warn("Failed to close plugin classLoader after load failure", exception);
         }
     }
 }

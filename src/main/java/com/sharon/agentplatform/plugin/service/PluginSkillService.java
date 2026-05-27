@@ -3,13 +3,17 @@ package com.sharon.agentplatform.plugin.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sharon.agentplatform.common.exception.BusinessException;
 import com.sharon.agentplatform.plugin.core.LoadedPluginSkill;
+import com.sharon.agentplatform.plugin.core.PluginLoadResult;
 import com.sharon.agentplatform.plugin.core.PluginSkillLoader;
 import com.sharon.agentplatform.plugin.dto.PluginPackageResponse;
+import com.sharon.agentplatform.plugin.dto.PluginRuntimeResponse;
 import com.sharon.agentplatform.plugin.dto.PluginSkillResponse;
 import com.sharon.agentplatform.plugin.entity.PluginPackageEntity;
 import com.sharon.agentplatform.plugin.entity.PluginSkillEntity;
 import com.sharon.agentplatform.plugin.repository.PluginPackageRepository;
 import com.sharon.agentplatform.plugin.repository.PluginSkillRepository;
+import com.sharon.agentplatform.plugin.runtime.PluginRuntime;
+import com.sharon.agentplatform.plugin.runtime.PluginRuntimeRegistry;
 import com.sharon.agentplatform.skill.core.Skill;
 import com.sharon.agentplatform.skill.core.SkillMetadata;
 import com.sharon.agentplatform.skill.core.SkillRegistry;
@@ -42,6 +46,7 @@ public class PluginSkillService {
     private final PluginPackageRepository pluginPackageRepository;
     private final PluginSkillRepository pluginSkillRepository;
     private final PluginSkillValidator pluginSkillValidator;
+    private final PluginRuntimeRegistry pluginRuntimeRegistry;
     private final ObjectMapper objectMapper;
     private final Path pluginDir = Path.of("data", "plugins").toAbsolutePath().normalize();
 
@@ -50,12 +55,14 @@ public class PluginSkillService {
                               PluginPackageRepository pluginPackageRepository,
                               PluginSkillRepository pluginSkillRepository,
                               PluginSkillValidator pluginSkillValidator,
+                              PluginRuntimeRegistry pluginRuntimeRegistry,
                               ObjectMapper objectMapper) {
         this.pluginSkillLoader = pluginSkillLoader;
         this.skillRegistry = skillRegistry;
         this.pluginPackageRepository = pluginPackageRepository;
         this.pluginSkillRepository = pluginSkillRepository;
         this.pluginSkillValidator = pluginSkillValidator;
+        this.pluginRuntimeRegistry = pluginRuntimeRegistry;
         this.objectMapper = objectMapper;
     }
 
@@ -82,24 +89,38 @@ public class PluginSkillService {
         pluginPackage.setCreatedAt(now);
         pluginPackage.setUpdatedAt(now);
 
+        PluginLoadResult loadResult = null;
+        List<String> registeredSkillNames = new ArrayList<>();
         try (InputStream inputStream = file.getInputStream()) {
             Files.copy(inputStream, jarPath, StandardCopyOption.REPLACE_EXISTING);
 
-            List<Skill> skills = pluginSkillLoader.loadSkillsFromJar(jarPath);
+            loadResult = pluginSkillLoader.loadWithClassLoader(jarPath);
+            List<Skill> skills = loadResult.getLoadedSkills();
             pluginSkillValidator.validateForUpload(skills);
             List<LoadedPluginSkill> loadedPluginSkills = registerAndPersistSkills(pluginId, jarPath, skills, true);
+            registeredSkillNames = loadedPluginSkills.stream()
+                    .map(LoadedPluginSkill::getSkillName)
+                    .toList();
 
             pluginPackage.setStatus(STATUS_ENABLED);
             pluginPackage.setErrorMessage(null);
-            pluginPackage.setLoadedAt(LocalDateTime.now());
-            pluginPackage.setUpdatedAt(LocalDateTime.now());
+            LocalDateTime loadedAt = LocalDateTime.now();
+            pluginPackage.setLoadedAt(loadedAt);
+            pluginPackage.setUpdatedAt(loadedAt);
             pluginPackageRepository.save(pluginPackage);
+            registerRuntime(pluginId, jarPath, loadResult, registeredSkillNames, loadedAt);
 
             return new LoadedPluginUpload(pluginId, loadedPluginSkills);
         } catch (BusinessException e) {
+            unregisterSkills(registeredSkillNames);
+            disablePluginSkillRecords(pluginId, registeredSkillNames);
+            closeLoadResult(loadResult);
             saveFailedPackage(pluginPackage, e);
             throw e;
         } catch (IOException | RuntimeException e) {
+            unregisterSkills(registeredSkillNames);
+            disablePluginSkillRecords(pluginId, registeredSkillNames);
+            closeLoadResult(loadResult);
             saveFailedPackage(pluginPackage, e);
             throw new BusinessException("Failed to load plugin jar", e);
         }
@@ -109,6 +130,13 @@ public class PluginSkillService {
         return pluginPackageRepository.findTop50ByOrderByCreatedAtDesc()
                 .stream()
                 .map(this::toPackageResponse)
+                .toList();
+    }
+
+    public List<PluginRuntimeResponse> listPluginRuntimes() {
+        return pluginRuntimeRegistry.list()
+                .stream()
+                .map(this::toRuntimeResponse)
                 .toList();
     }
 
@@ -123,6 +151,7 @@ public class PluginSkillService {
             skill.setUpdatedAt(now);
         }
         pluginSkillRepository.saveAll(skills);
+        pluginRuntimeRegistry.unload(pluginId);
 
         pluginPackage.setStatus(STATUS_DISABLED);
         pluginPackage.setUpdatedAt(now);
@@ -161,27 +190,105 @@ public class PluginSkillService {
 
     private void loadAndEnablePackage(PluginPackageEntity pluginPackage) {
         Path jarPath = Path.of(pluginPackage.getJarPath()).toAbsolutePath().normalize();
-        List<Skill> skills = pluginSkillLoader.loadSkillsFromJar(jarPath);
-        pluginSkillValidator.validateForBootstrap(skills);
-        registerAndPersistSkills(pluginPackage.getPluginId(), jarPath, skills, true);
+        PluginLoadResult loadResult = null;
+        List<String> registeredSkillNames = new ArrayList<>();
+        try {
+            loadResult = pluginSkillLoader.loadWithClassLoader(jarPath);
+            List<Skill> skills = loadResult.getLoadedSkills();
+            pluginSkillValidator.validateForBootstrap(skills);
+            List<LoadedPluginSkill> loadedPluginSkills = registerAndPersistSkills(pluginPackage.getPluginId(), jarPath, skills, true);
+            registeredSkillNames = loadedPluginSkills.stream()
+                    .map(LoadedPluginSkill::getSkillName)
+                    .toList();
 
-        pluginPackage.setStatus(STATUS_ENABLED);
-        pluginPackage.setErrorMessage(null);
-        pluginPackage.setLoadedAt(LocalDateTime.now());
-        pluginPackage.setUpdatedAt(LocalDateTime.now());
-        pluginPackageRepository.save(pluginPackage);
+            LocalDateTime loadedAt = LocalDateTime.now();
+            pluginPackage.setStatus(STATUS_ENABLED);
+            pluginPackage.setErrorMessage(null);
+            pluginPackage.setLoadedAt(loadedAt);
+            pluginPackage.setUpdatedAt(loadedAt);
+            pluginPackageRepository.save(pluginPackage);
+            registerRuntime(pluginPackage.getPluginId(), jarPath, loadResult, registeredSkillNames, loadedAt);
+        } catch (RuntimeException exception) {
+            unregisterSkills(registeredSkillNames);
+            disablePluginSkillRecords(pluginPackage.getPluginId(), registeredSkillNames);
+            closeLoadResult(loadResult);
+            throw exception;
+        }
     }
 
     private List<LoadedPluginSkill> registerAndPersistSkills(String pluginId, Path jarPath, List<Skill> skills, boolean enabled) {
         List<LoadedPluginSkill> loadedPluginSkills = new ArrayList<>();
-        for (Skill skill : skills) {
-            skillRegistry.register(skill);
-            LoadedPluginSkill loadedPluginSkill = toLoadedPluginSkill(skill, jarPath);
-            loadedPluginSkills.add(loadedPluginSkill);
-            upsertPluginSkill(pluginId, skill, enabled);
-            log.info("Registered plugin skill: {}", skill.metadata().getName());
+        List<String> registeredSkillNames = new ArrayList<>();
+        try {
+            for (Skill skill : skills) {
+                skillRegistry.register(skill);
+                String skillName = skill.metadata().getName();
+                registeredSkillNames.add(skillName);
+                LoadedPluginSkill loadedPluginSkill = toLoadedPluginSkill(skill, jarPath);
+                loadedPluginSkills.add(loadedPluginSkill);
+                upsertPluginSkill(pluginId, skill, enabled);
+                log.info("Registered plugin skill: {}", skillName);
+            }
+        } catch (RuntimeException exception) {
+            unregisterSkills(registeredSkillNames);
+            disablePluginSkillRecords(pluginId, registeredSkillNames);
+            throw exception;
         }
         return loadedPluginSkills;
+    }
+
+    private void registerRuntime(String pluginId,
+                                 Path jarPath,
+                                 PluginLoadResult loadResult,
+                                 List<String> skillNames,
+                                 LocalDateTime loadedAt) {
+        if (loadResult == null || loadResult.getClassLoader() == null) {
+            return;
+        }
+
+        PluginRuntime runtime = new PluginRuntime();
+        runtime.setPluginId(pluginId);
+        runtime.setJarPath(jarPath.toString());
+        runtime.setClassLoader(loadResult.getClassLoader());
+        runtime.setSkillNames(skillNames);
+        runtime.setLoadedAt(loadedAt);
+        pluginRuntimeRegistry.register(runtime);
+    }
+
+    private void closeLoadResult(PluginLoadResult loadResult) {
+        if (loadResult == null || loadResult.getClassLoader() == null) {
+            return;
+        }
+        try {
+            loadResult.getClassLoader().close();
+        } catch (IOException exception) {
+            log.warn("Failed to close plugin classLoader after failed load", exception);
+        }
+    }
+
+    private void unregisterSkills(List<String> skillNames) {
+        if (skillNames == null || skillNames.isEmpty()) {
+            return;
+        }
+        for (String skillName : skillNames) {
+            skillRegistry.unregister(skillName);
+        }
+    }
+
+    private void disablePluginSkillRecords(String pluginId, List<String> skillNames) {
+        if (pluginId == null || pluginId.isBlank() || skillNames == null || skillNames.isEmpty()) {
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        for (String skillName : skillNames) {
+            pluginSkillRepository.findByPluginIdAndSkillName(pluginId, skillName)
+                    .ifPresent(entity -> {
+                        entity.setEnabled(false);
+                        entity.setUpdatedAt(now);
+                        pluginSkillRepository.save(entity);
+                    });
+        }
     }
 
     private void upsertPluginSkill(String pluginId, Skill skill, boolean enabled) {
@@ -285,6 +392,17 @@ public class PluginSkillService {
         response.setMetadata(parseJson(entity.getMetadataJson()));
         response.setCreatedAt(entity.getCreatedAt());
         response.setUpdatedAt(entity.getUpdatedAt());
+        return response;
+    }
+
+    private PluginRuntimeResponse toRuntimeResponse(PluginRuntime runtime) {
+        PluginRuntimeResponse response = new PluginRuntimeResponse();
+        response.setPluginId(runtime.getPluginId());
+        response.setJarPath(runtime.getJarPath());
+        response.setSkillNames(runtime.getSkillNames());
+        response.setClassLoaderType(runtime.getClassLoader() == null ? null : runtime.getClassLoader().getClass().getName());
+        response.setLoadedAt(runtime.getLoadedAt());
+        response.setClosed(runtime.isClosed());
         return response;
     }
 

@@ -188,6 +188,7 @@
   </header>
 
   <nav>
+    <a href="#system">系统状态</a>
     <a href="#models">模型</a>
     <a href="#skills">Skill</a>
     <a href="#plugins">插件</a>
@@ -200,6 +201,21 @@
 
   <main>
     <div class="grid">
+      <section id="system" class="card">
+        <h2>系统状态 / System Status</h2>
+        <div class="hint">Demo 前可先运行系统自检，快速查看模型、Skill、插件运行时、MCP、External MCP、Memory 和控制台入口状态。</div>
+
+        <div class="section">
+          <div class="actions">
+            <button onclick="systemHealthCheck()">系统自检</button>
+            <button class="secondary" onclick="getPluginRuntimes()">插件运行时</button>
+            <button class="secondary" onclick="getModels()">快速检查模型</button>
+            <button class="secondary" onclick="getSkills()">快速检查 Skill</button>
+            <button class="secondary" onclick="getMcpTools()">快速检查 MCP 工具</button>
+          </div>
+        </div>
+      </section>
+
       <section id="models" class="card">
         <h2>模型管理 / Model Console</h2>
 
@@ -588,6 +604,14 @@
       } catch (error) {
         showError(title + " failed", error);
       }
+    }
+
+    function systemHealthCheck() {
+      return run("GET /api/system/health-check", () => requestJson("GET", "/api/system/health-check"));
+    }
+
+    function getPluginRuntimes() {
+      return run("GET /api/plugins/runtime", () => requestJson("GET", "/api/plugins/runtime"));
     }
 
     function getModels() {

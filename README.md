@@ -16,9 +16,11 @@
 - Skill Registry 与统一 Skill 启用/禁用
 - Plugin Skill Market：Jar 上传、热加载、持久化、启用/禁用、启动恢复
 - PluginSkillValidator 插件安装校验
+- PluginRuntimeRegistry 插件运行时与 URLClassLoader 生命周期管理
 - MCP Tool Registry、REST MCP 接口、JSON-RPC Adapter
 - External MCP HTTP Client：注册、同步和调用外部 MCP Server 工具
 - Web 控制台与 PowerShell CLI 控制台
+- System Health Check 系统自检
 - 简历优化同步/异步任务与追问式调用
 
 ## 2. 考核要求完成情况
@@ -33,10 +35,12 @@
 | Skill 元数据 | `name` / `description` / `parameterSchema` / `version` / `dependencies` | 已完成     |
 | Skill 启用/禁用 | 插件包维度 + 单 Skill 维度逻辑启用/禁用 | 已完成     |
 | 插件安装校验 | `PluginSkillValidator` 校验 Skill 与 metadata | 已完成     |
+| 插件运行时生命周期 | `PluginRuntimeRegistry` 管理插件运行时，禁用插件时关闭 `URLClassLoader` | MVP 已完成 |
 | MCP 兼容 | `tools/list`、`tools/call`、JSON-RPC Adapter、External MCP Client | MVP 已完成 |
 | 外部 MCP Server | 独立 `mcp-demo-server`，支持注册、同步、调用 | 已完成     |
 | 3 个不同方向 Skill 演示 | `calculator`、`weather`、`file_search`、`resume_optimize`、`text_reverse`、`text_insight`、`mcp_echo_client` 等 | 已完成     |
 | 简单管理界面 | 静态 Web Console + PowerShell CLI scripts | 已完成     |
+| 系统自检 | `GET /api/system/health-check` 聚合模型、Skill、插件 runtime、MCP、Memory、Console 状态 | 已完成     |
 
 > 说明：本项目当前没有实现完整标准 MCP transport。相关内容放在“当前限制”和“未来规划”中
 
@@ -44,49 +48,61 @@
 
 ```mermaid
 flowchart TD
-    U["User / Apifox / Demo Video"] --> WC["Static Web Console<br/>/console.html"]
-    U --> CLI["PowerShell CLI<br/>scripts/*.ps1"]
-    U --> API["Spring Boot REST API"]
+    U["User / Apifox / Web Console / CLI"] --> API["Spring Boot REST API"]
 
-    WC --> API
-    CLI --> API
+    subgraph CHAT["Agent 调用主链路"]
+        API --> CHATAPI["POST /api/chat"]
+        CHATAPI --> AR["AgentRuntime"]
+        AR --> MEM["MemoryService"]
+        AR --> MODEL["ModelService / ModelRouter"]
+        AR --> SKILL["SkillRegistry"]
+        AR --> RUNS["Agent Run History"]
+    end
 
-    API --> AR["AgentRuntime<br/>/api/chat"]
-    API --> MC["Model APIs<br/>/api/models"]
-    API --> SKAPI["Skill APIs<br/>/api/skills"]
-    API --> PLAPI["Plugin Market APIs<br/>/api/plugins"]
-    API --> MCPAPI["MCP APIs<br/>/api/mcp/*"]
-    API --> RESAPI["Resume APIs<br/>/api/resume/*"]
+    subgraph SKILLS["Skill 执行层"]
+        SKILL --> BUILTIN["Built-in Skills"]
+        SKILL --> PLUGINSKILL["Plugin Skills"]
+        SKILL --> MCPBACKED["MCP backed Skills"]
+    end
 
-    AR --> MR["ModelRouter / ModelService"]
-    AR --> MEM["MemoryService"]
-    AR --> SR["SkillRegistry"]
-    AR --> HIST["Agent Run History"]
+    subgraph PLUGIN["插件市场与类加载器生命周期"]
+        API --> PLUGINAPI["/api/plugins"]
+        PLUGINAPI --> PLUGINSVC["PluginSkillService"]
+        PLUGINSVC --> LOADER["PluginSkillLoader"]
+        LOADER --> RUNTIME["PluginRuntimeRegistry"]
+        RUNTIME --> CL["URLClassLoader per plugin"]
+        PLUGINSVC --> PLUGINDB["plugin_package / plugin_skill"]
+    end
 
-    MR --> LLM["OpenAI-compatible LLM<br/>SiliconFlow / Ollama 示例"]
-    MEM --> DB["MySQL<br/>conversation_message"]
+    subgraph MCP["MCP 工具层"]
+        API --> MCPAPI["/api/mcp/*"]
+        MCPAPI --> MCPREG["McpToolRegistry"]
+        MCPREG --> FSTOOL["filesystem.search"]
+        MCPREG --> DBTOOL["database.recent_agent_runs"]
+        MCPAPI --> EXTCLIENT["External MCP HTTP Client"]
+        EXTCLIENT --> EXTSERVER["mcp-demo-server<br/>localhost:8090"]
+    end
+
+    subgraph RESUME["简历优化业务链路"]
+        API --> RESUMEAPI["/api/resume/*"]
+        RESUMEAPI --> RESUMESVC["Resume Services"]
+        RESUMESVC --> MODEL
+    end
+
+    subgraph OBSERVE["观测与系统自检"]
+        API --> HEALTH["/api/system/health-check"]
+        HEALTH --> MODEL
+        HEALTH --> SKILL
+        HEALTH --> RUNTIME
+        HEALTH --> MCPREG
+        HEALTH --> RUNS
+    end
+
+    MEM --> DB["MySQL"]
+    RUNS --> DB
+    PLUGINDB --> DB
+    RESUMESVC --> DB
     MEM --> FILE["File LongTermMemory"]
-    HIST --> DB
-
-    SR --> BUILTIN["Built-in Skills<br/>calculator / weather / file_search / resume_optimize"]
-    SR --> PLUGIN["External Plugin Skills<br/>URLClassLoader"]
-    PLAPI --> PM["Plugin Market<br/>plugin_package / plugin_skill"]
-    PM --> DB
-    PM --> PLUGIN
-
-    SR --> MCPTR["MCP Tool Registry"]
-    MCPTR --> FST["filesystem.search"]
-    MCPTR --> DBT["database.recent_agent_runs"]
-    MCPAPI --> MCPTR
-    MCPAPI --> RPC["MCP JSON-RPC Adapter<br/>tools/list tools/call"]
-    MCPAPI --> EXT["External MCP HTTP Client"]
-    EXT --> EXTDB["mcp_external_server<br/>mcp_external_tool"]
-    EXTDB --> DB
-    EXT --> DEMO["External MCP Demo Server<br/>localhost:8090/mcp/rpc"]
-
-    RESAPI --> RESSVC["Resume Services"]
-    RESSVC --> DB
-    RESSVC --> LLM
 ```
 
 ## 4. 技术栈
@@ -308,6 +324,9 @@ Skill 统计：
 - 持久化到 `plugin_package` / `plugin_skill`
 - 支持插件包 enable / disable
 - 支持服务启动时自动恢复 `ENABLED` 插件
+- 每个插件包运行时维护独立 `PluginRuntime`
+- `PluginRuntimeRegistry` 管理当前 JVM 中已加载的插件 runtime
+- 禁用插件时注销对应 Skill、关闭 `URLClassLoader`、移除 runtime 引用
 
 插件主要接口：
 
@@ -315,13 +334,15 @@ Skill 统计：
 - `GET /api/plugins`
 - `POST /api/plugins/{pluginId}/enable`
 - `POST /api/plugins/{pluginId}/disable`
+- `GET /api/plugins/runtime`
 
 当前卸载边界：
 
-- 当前是逻辑启用/禁用
-- 不做真正 ClassLoader 物理卸载
+- 插件包禁用会关闭 `URLClassLoader` 并移除平台引用
+- 不声称 JVM 会立即卸载插件类
+- 如果插件代码持有线程、静态缓存或外部引用，ClassLoader 仍可能无法被 GC
 - 不删除 Jar
-- 不做插件权限沙箱
+- 不做插件权限沙箱和依赖冲突隔离
 
 ### 5.5 PluginSkillValidator
 
@@ -535,6 +556,7 @@ src/main/resources/static/console.html
 
 包含模块：
 
+- 系统状态 / System Status
 - 模型管理 / Model Console
 - Vision Chat
 - Skill 市场 / Skill Market
@@ -547,6 +569,7 @@ src/main/resources/static/console.html
 
 说明：
 
+- 系统状态模块用于 Demo 前快速检查模型、Skill、插件 runtime、MCP、Memory、Console 入口
 - 插件市场模块用于上传外部 Skill Jar，不用于上传简历、图片等业务文件
 - 简历优化模块用于稳定演示上传简历、读取岗位、同步/异步优化、查询任务状态
 - Agent 对话模块用于演示自然语言调用 Skill、显式 Skill 调用、参数追问与补参
@@ -757,25 +780,25 @@ public class MySkill implements Skill {
 
 上传插件前会经过 `PluginSkillValidator`：
 
-- Jar 中至少有一个 Skill。
-- `metadata` 不能为空。
-- `metadata.name` 不能为空。
-- `metadata.description` 不能为空。
-- `metadata.version` 不能为空。
-- `metadata.parameterSchema` 不能为空。
-- 同一个 Jar 内不能出现重复 `skillName`。
-- 上传新 Jar 不允许覆盖当前已注册的 `skillName`。
+- Jar 中至少有一个 Skill
+- `metadata` 不能为空
+- `metadata.name` 不能为空
+- `metadata.description` 不能为空
+- `metadata.version` 不能为空
+- `metadata.parameterSchema` 不能为空
+- 同一个 Jar 内不能出现重复 `skillName`
+- 上传新 Jar 不允许覆盖当前已注册的 `skillName`
 
-因此插件 Skill 的 `name` 不要与内置 Skill 或已安装插件重名。
+因此插件 Skill 的 `name` 不要与内置 Skill 或已安装插件重名
 
 ### 9.5 当前插件限制
 
-- 插件 Skill 必须是轻量 Java 类。
-- 不支持插件内 Spring `@Autowired` 注入。
-- 不支持插件内自带 JPA Entity / Repository / Flyway 迁移。
-- 不做真正 ClassLoader 物理卸载。
-- 不做权限沙箱。
-- 不做插件依赖冲突治理。
+- 插件 Skill 必须是轻量 Java 类
+- 不支持插件内 Spring `@Autowired` 注入
+- 不支持插件内自带 JPA Entity / Repository / Flyway 迁移
+- 未做真正 ClassLoader 物理卸载
+- 未做权限沙箱
+- 未做插件依赖冲突治理
 
 未来可通过 `PluginContext` / SPI 暴露受控平台能力，例如：
 
@@ -908,7 +931,7 @@ MYSQL_PASSWORD
 OPENAI_API_KEY
 ```
 
-不要把 API Key 或数据库密码写入源码、README 示例或日志。
+不要把 API Key 或数据库密码写入源码、README 示例或日志
 
 ### 11.3 启动主项目
 
@@ -995,6 +1018,7 @@ POST /api/skills/calculator/enable
 ```http
 POST /api/plugins/skills/upload
 GET /api/plugins
+GET /api/plugins/runtime
 POST /api/plugins/{pluginId}/disable
 POST /api/plugins/{pluginId}/enable
 ```
@@ -1027,7 +1051,14 @@ GET /api/agent/runs
 GET /api/agent/runs/{runId}
 ```
 
-### 12.8 Resume Optimize
+### 12.8 System Status
+
+```http
+GET /api/system/health-check
+GET /api/plugins/runtime
+```
+
+### 12.9 Resume Optimize
 
 ```http
 POST /api/conversations/{conversationId}/attachments
@@ -1051,7 +1082,7 @@ server:
   port: 8080
 ```
 
-或停止占用端口的进程。
+或停止占用端口的进程
 
 ### 13.2 API Key 未配置
 
@@ -1088,7 +1119,7 @@ Vision Chat 需要：
 Skill name already exists: xxx
 ```
 
-说明当前 registry 中已有同名 Skill。当前上传策略较保守，不允许新 Jar 覆盖已注册 SkillName。
+说明当前 registry 中已有同名 Skill。当前上传策略较保守，不允许新 Jar 覆盖已注册 SkillName
 
 ### 13.7 mcp-demo-server 未启动
 
@@ -1119,7 +1150,7 @@ CLI 脚本在部分 Windows 控制台里可能出现中文编码问题。建议�
 - 不实现完整 MCP `initialize` / `capabilities`
 - External MCP 不管理外部 server 进程生命周期
 - 插件 Skill 不支持 Spring Bean 注入
-- 插件不支持真正 ClassLoader 物理卸载
+- 插件禁用会关闭 `URLClassLoader` 并移除平台引用，但不保证 JVM 立即卸载插件类
 - 插件不做依赖冲突治理和安全沙箱
 - Skill 市场没有权限系统
 - Vision Chat 不支持音频/视频
@@ -1144,4 +1175,3 @@ CLI 脚本在部分 Windows 控制台里可能出现中文编码问题。建议�
 - Web 管理后台 Vue / React 版本
 - 权限、审计与沙箱
 - 更多外部 Skill 市场示例
-

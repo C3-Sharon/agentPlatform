@@ -4,6 +4,7 @@ import com.sharon.agentplatform.agent.service.LlmSkillDecisionService;
 import com.sharon.agentplatform.agent.dto.ChatRequest;
 import com.sharon.agentplatform.agent.dto.ChatResponse;
 import com.sharon.agentplatform.agent.history.service.AgentRunHistoryService;
+import com.sharon.agentplatform.agent.pending.PendingSkillCallStore;
 import com.sharon.agentplatform.common.exception.ModelCallException;
 import com.sharon.agentplatform.memory.core.ChatMessage;
 import com.sharon.agentplatform.memory.core.LongTermMemory;
@@ -635,12 +636,13 @@ public class AgentRuntime {
                 Map.of(
                         "skillName", pending.getSkillName(),
                         "knownParams", knownParams,
-                        "missingParams", missingParams
+                        "missingParams", missingParams,
+                        "pendingStore", pendingSkillCallStore.storeType()
                 )
         ));
 
         if (missingParams.isEmpty()) {
-            pendingSkillCallStore.clear(conversationId);
+            pendingSkillCallStore.remove(conversationId);
 
             trace.add(AgentTrace.success(
                     AgentStep.SELECT_SKILL,
@@ -672,7 +674,7 @@ public class AgentRuntime {
 
         pending.setKnownParams(knownParams);
         pending.setMissingParams(missingParams);
-        pendingSkillCallStore.save(pending);
+        pendingSkillCallStore.save(conversationId, pending);
 
         trace.add(AgentTrace.success(
                 AgentStep.INTENT_DETECTION,
@@ -680,7 +682,8 @@ public class AgentRuntime {
                 Map.of(
                         "skillName", pending.getSkillName(),
                         "knownParams", knownParams,
-                        "missingParams", missingParams
+                        "missingParams", missingParams,
+                        "pendingStore", pendingSkillCallStore.storeType()
                 )
         ));
 
@@ -717,7 +720,7 @@ public class AgentRuntime {
         pending.setKnownParams(params == null ? new LinkedHashMap<>() : new LinkedHashMap<>(params));
         pending.setMissingParams(missingParams);
         pending.setCreatedAt(LocalDateTime.now());
-        pendingSkillCallStore.save(pending);
+        pendingSkillCallStore.save(conversationId, pending);
 
         trace.add(AgentTrace.success(
                 AgentStep.INTENT_DETECTION,
@@ -725,7 +728,8 @@ public class AgentRuntime {
                 Map.of(
                         "skillName", skillName,
                         "knownParams", pending.getKnownParams(),
-                        "missingParams", missingParams
+                        "missingParams", missingParams,
+                        "pendingStore", pendingSkillCallStore.storeType()
                 )
         ));
 
@@ -782,7 +786,7 @@ public class AgentRuntime {
         pending.setKnownParams(knownParams);
         pending.setMissingParams(missingParams);
         pending.setCreatedAt(LocalDateTime.now());
-        pendingSkillCallStore.save(pending);
+        pendingSkillCallStore.save(conversationId, pending);
 
         trace.add(AgentTrace.success(
                 AgentStep.INTENT_DETECTION,
@@ -790,7 +794,8 @@ public class AgentRuntime {
                 Map.of(
                         "skillName", RESUME_OPTIMIZE_SKILL,
                         "knownParams", knownParams,
-                        "missingParams", missingParams
+                        "missingParams", missingParams,
+                        "pendingStore", pendingSkillCallStore.storeType()
                 )
         ));
 

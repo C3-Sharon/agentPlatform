@@ -13,6 +13,7 @@ public class SystemHealthResponse {
     private McpHealth mcp;
     private ExternalMcpHealth externalMcp;
     private MemoryHealth memory;
+    private PendingSkillHealth pendingSkill;
     private ConsoleHealth console;
 
     public String getStatus() {
@@ -77,6 +78,14 @@ public class SystemHealthResponse {
 
     public void setMemory(MemoryHealth memory) {
         this.memory = memory;
+    }
+
+    public PendingSkillHealth getPendingSkill() {
+        return pendingSkill;
+    }
+
+    public void setPendingSkill(PendingSkillHealth pendingSkill) {
+        this.pendingSkill = pendingSkill;
     }
 
     public ConsoleHealth getConsole() {
@@ -184,6 +193,19 @@ public class SystemHealthResponse {
         public void setLongTerm(String longTerm) { this.longTerm = longTerm; }
         public String getRunHistory() { return runHistory; }
         public void setRunHistory(String runHistory) { this.runHistory = runHistory; }
+    }
+
+    public static class PendingSkillHealth {
+        private String storeType;
+        private Long ttlMinutes;
+        private String keyPattern;
+
+        public String getStoreType() { return storeType; }
+        public void setStoreType(String storeType) { this.storeType = storeType; }
+        public Long getTtlMinutes() { return ttlMinutes; }
+        public void setTtlMinutes(Long ttlMinutes) { this.ttlMinutes = ttlMinutes; }
+        public String getKeyPattern() { return keyPattern; }
+        public void setKeyPattern(String keyPattern) { this.keyPattern = keyPattern; }
     }
 
     public static class ConsoleHealth {

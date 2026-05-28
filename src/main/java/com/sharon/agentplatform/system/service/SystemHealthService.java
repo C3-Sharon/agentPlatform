@@ -1,5 +1,7 @@
 package com.sharon.agentplatform.system.service;
 
+import com.sharon.agentplatform.agent.pending.PendingSkillCallStore;
+import com.sharon.agentplatform.agent.pending.PendingSkillProperties;
 import com.sharon.agentplatform.mcp.core.McpToolMetadata;
 import com.sharon.agentplatform.mcp.core.McpToolRegistry;
 import com.sharon.agentplatform.mcp.external.entity.McpExternalServerEntity;
@@ -32,19 +34,25 @@ public class SystemHealthService {
     private final PluginRuntimeRegistry pluginRuntimeRegistry;
     private final McpToolRegistry mcpToolRegistry;
     private final McpExternalServerRepository mcpExternalServerRepository;
+    private final PendingSkillCallStore pendingSkillCallStore;
+    private final PendingSkillProperties pendingSkillProperties;
 
     public SystemHealthService(ModelConfigStore modelConfigStore,
                                SkillRegistry skillRegistry,
                                PluginPackageRepository pluginPackageRepository,
                                PluginRuntimeRegistry pluginRuntimeRegistry,
                                McpToolRegistry mcpToolRegistry,
-                               McpExternalServerRepository mcpExternalServerRepository) {
+                               McpExternalServerRepository mcpExternalServerRepository,
+                               PendingSkillCallStore pendingSkillCallStore,
+                               PendingSkillProperties pendingSkillProperties) {
         this.modelConfigStore = modelConfigStore;
         this.skillRegistry = skillRegistry;
         this.pluginPackageRepository = pluginPackageRepository;
         this.pluginRuntimeRegistry = pluginRuntimeRegistry;
         this.mcpToolRegistry = mcpToolRegistry;
         this.mcpExternalServerRepository = mcpExternalServerRepository;
+        this.pendingSkillCallStore = pendingSkillCallStore;
+        this.pendingSkillProperties = pendingSkillProperties;
     }
 
     public SystemHealthResponse check() {
@@ -58,6 +66,7 @@ public class SystemHealthService {
         response.setMcp(safeBuild(response, this::buildMcpHealth, emptyMcpHealth()));
         response.setExternalMcp(safeBuild(response, this::buildExternalMcpHealth, emptyExternalMcpHealth()));
         response.setMemory(buildMemoryHealth());
+        response.setPendingSkill(buildPendingSkillHealth());
         response.setConsole(buildConsoleHealth());
         return response;
     }
@@ -181,6 +190,14 @@ public class SystemHealthService {
         health.setShortTerm("mysql: conversation_message");
         health.setLongTerm("file: FileLongTermMemoryStore");
         health.setRunHistory("mysql: agent_run / agent_run_trace");
+        return health;
+    }
+
+    private SystemHealthResponse.PendingSkillHealth buildPendingSkillHealth() {
+        SystemHealthResponse.PendingSkillHealth health = new SystemHealthResponse.PendingSkillHealth();
+        health.setStoreType(pendingSkillCallStore.storeType());
+        health.setTtlMinutes(pendingSkillProperties.getTtlMinutes());
+        health.setKeyPattern("agent:pending-skill:{conversationId}");
         return health;
     }
 

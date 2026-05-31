@@ -329,6 +329,7 @@
       <section id="resume" class="card">
         <h2>简历优化 / Resume Optimize</h2>
         <div class="hint">该模块用于稳定演示简历优化业务流程：上传简历、读取岗位网页、同步/异步优化、查询任务状态。</div>
+        <div class="hint">上传简历后需要先解析文本，再调用简历优化。会话附件接口负责保存文件和绑定 conversation_resource；解析接口负责将文件内容写入 resume_file，供 resume_optimize 使用。</div>
 
         <div class="section">
           <label>conversationId
@@ -342,6 +343,17 @@
             <button class="secondary" onclick="getConversationResources()">查询会话资源</button>
           </div>
           <div class="hint">上传成功后，请从响应中的 resourceId 或 metadata.resumeFileId 复制 resumeFileId。</div>
+        </div>
+
+        <div class="section">
+          <h3>解析简历文字 / Parse Resume File</h3>
+          <label>resumeFileId
+            <input id="resumeParseFileId" placeholder="从上传响应复制 resumeFileId" />
+          </label>
+          <div class="actions">
+            <button onclick="parseResumeFile()">解析简历</button>
+          </div>
+          <div class="hint">解析成功后会返回 textLength 和 preview；解析完成后再调用同步或异步简历优化。</div>
         </div>
 
         <div class="section">
@@ -466,6 +478,25 @@
             <button onclick="memorySecondTurn()">记忆测试第二轮</button>
             <button class="secondary" onclick="getConversationMessages()">查询会话消息</button>
           </div>
+        </div>
+
+        <div class="section">
+          <h3>长期记忆 / Long-Term Memory</h3>
+          <div class="hint">长期记忆由 FileLongTermMemoryStore 保存，和 MySQL 短期记忆不同。AgentRuntime 处理 /api/chat 时会加载长期记忆，trace 中 longTermCount 可体现是否读取到长期记忆。</div>
+          <div class="row">
+            <label>memoryKey
+              <input id="longTermMemoryKey" value="defense_focus" />
+            </label>
+            <label>content
+              <input id="longTermMemoryContent" value="我的项目答辩重点是 Skill 市场、MCP 兼容和插件热加载。" />
+            </label>
+          </div>
+          <div class="actions">
+            <button onclick="saveLongTermMemory()">保存长期记忆</button>
+            <button class="secondary" onclick="getMemoryView()">查询长期记忆</button>
+            <button class="secondary" onclick="prepareLongTermMemoryChat()">填入长期记忆测试问题</button>
+          </div>
+          <div class="hint">测试问题：我的项目答辩重点是什么？按钮会把 Chat Agent 的 conversationId 设置为当前 Memory conversationId。</div>
         </div>
 
         <div class="section">
@@ -715,6 +746,11 @@
       return run("GET /api/conversations/" + conversationId + "/resources", () => requestJson("GET", "/api/conversations/" + conversationId + "/resources"));
     }
 
+    function parseResumeFile() {
+      const resumeFileId = encodeURIComponent(requireValue("resumeParseFileId", "resumeFileId"));
+      return run("POST /api/resume/files/" + resumeFileId + "/parse", () => requestJson("POST", "/api/resume/files/" + resumeFileId + "/parse"));
+    }
+
     function readJobPosting() {
       const body = { jobUrl: requireValue("resumeJobUrl", "jobUrl") };
       return run("POST /api/resume/job-postings/read", () => requestJson("POST", "/api/resume/job-postings/read", body));
@@ -824,6 +860,25 @@
     function getConversationMessages() {
       const conversationId = encodeURIComponent(requireValue("memoryConversationId", "conversationId"));
       return run("GET /api/memory/conversations/" + conversationId + "/messages", () => requestJson("GET", "/api/memory/conversations/" + conversationId + "/messages"));
+    }
+
+    function saveLongTermMemory() {
+      const conversationId = encodeURIComponent(requireValue("memoryConversationId", "conversationId"));
+      const body = {
+        key: requireValue("longTermMemoryKey", "memoryKey"),
+        value: requireValue("longTermMemoryContent", "content")
+      };
+      return run("POST /api/memory/" + conversationId + "/long-term", () => requestJson("POST", "/api/memory/" + conversationId + "/long-term", body));
+    }
+
+    function getMemoryView() {
+      const conversationId = encodeURIComponent(requireValue("memoryConversationId", "conversationId"));
+      return run("GET /api/memory/" + conversationId, () => requestJson("GET", "/api/memory/" + conversationId));
+    }
+
+    function prepareLongTermMemoryChat() {
+      document.getElementById("chatConversationId").value = requireValue("memoryConversationId", "conversationId");
+      document.getElementById("chatMessage").value = "我的项目答辩重点是什么？";
     }
 
     function getAgentRuns() {

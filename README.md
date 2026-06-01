@@ -1,7 +1,10 @@
 # AI Agent 平台（MCP & Skill 市场）
-<a href="https://www.bilibili.com/video/BV1RE5F6cEy6" target="_blank">
-  <alt="点击观看视频" width="600">
-</a>
+
+<div align="center">
+  <a href="https://www.bilibili.com/video/BV1RE5F6cEy6" target="_blank" style="display:inline-block; background:#00A1D6; color:white; padding:12px 24px; border-radius:8px; text-decoration:none; font-weight:bold;">
+    点击观看demo视频
+  </a>
+</div>
 
 ## 1. 项目简介
 

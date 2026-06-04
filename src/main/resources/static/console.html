@@ -274,8 +274,10 @@
         <h2>Skill 市场 / Skill Market</h2>
 
         <div class="section">
+          <p class="hint">Skill 市场发现会聚合内置 Skill、插件 Skill、插件状态、运行时状态和调用统计。</p>
           <div class="actions">
             <button onclick="getSkills()">获取 Skill 列表</button>
+            <button class="secondary" onclick="getSkillMarket()">Skill 市场发现</button>
             <button onclick="getSkillStats()">获取 Skill 调用统计</button>
           </div>
         </div>
@@ -680,6 +682,10 @@
 
     function getSkills() {
       return run("GET /api/skills", () => requestJson("GET", "/api/skills"));
+    }
+
+    function getSkillMarket() {
+      return run("GET /api/skills/market", () => requestJson("GET", "/api/skills/market"));
     }
 
     function getSkillStats() {

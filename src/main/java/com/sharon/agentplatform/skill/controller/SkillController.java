@@ -8,7 +8,9 @@ import com.sharon.agentplatform.skill.core.SkillRegistry;
 import com.sharon.agentplatform.skill.core.SkillResult;
 import com.sharon.agentplatform.skill.dto.SkillCallRequest;
 import com.sharon.agentplatform.skill.dto.SkillEnableResponse;
+import com.sharon.agentplatform.skill.dto.SkillMarketResponse;
 import com.sharon.agentplatform.skill.dto.SkillStatsResponse;
+import com.sharon.agentplatform.skill.service.SkillMarketService;
 import com.sharon.agentplatform.skill.service.SkillSettingService;
 import com.sharon.agentplatform.skill.service.SkillStatsService;
 import org.springframework.web.bind.annotation.*;
@@ -24,13 +26,16 @@ public class SkillController {
     private final SkillRegistry skillRegistry;
     private final SkillStatsService skillStatsService;
     private final SkillSettingService skillSettingService;
+    private final SkillMarketService skillMarketService;
 
     public SkillController(SkillRegistry skillRegistry,
                            SkillStatsService skillStatsService,
-                           SkillSettingService skillSettingService) {
+                           SkillSettingService skillSettingService,
+                           SkillMarketService skillMarketService) {
         this.skillRegistry = skillRegistry;
         this.skillStatsService = skillStatsService;
         this.skillSettingService = skillSettingService;
+        this.skillMarketService = skillMarketService;
     }
 
     @GetMapping
@@ -46,6 +51,11 @@ public class SkillController {
     @GetMapping("/stats")
     public ApiResponse<List<SkillStatsResponse>> getSkillStats() {
         return ApiResponse.success(skillStatsService.getSkillStats());
+    }
+
+    @GetMapping("/market")
+    public ApiResponse<List<SkillMarketResponse>> getSkillMarket() {
+        return ApiResponse.success(skillMarketService.listMarketSkills());
     }
 
     @GetMapping("/{name}")

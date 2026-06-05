@@ -311,6 +311,7 @@
             <input id="pluginJar" type="file" accept=".jar" />
           </label>
           <div class="actions">
+            <button class="secondary" onclick="previewPlugin()">预览插件 Jar</button>
             <button onclick="uploadPlugin()">上传插件 Jar</button>
             <button class="secondary" onclick="getPlugins()">获取插件列表</button>
           </div>
@@ -716,6 +717,18 @@
         const formData = new FormData();
         formData.append("file", input.files[0]);
         return requestForm("/api/plugins/skills/upload", formData);
+      });
+    }
+
+    function previewPlugin() {
+      return run("POST /api/plugins/skills/preview", () => {
+        const input = document.getElementById("pluginJar");
+        if (!input.files || input.files.length === 0) {
+          throw "请选择插件 Jar 文件。";
+        }
+        const formData = new FormData();
+        formData.append("file", input.files[0]);
+        return requestForm("/api/plugins/skills/preview", formData);
       });
     }
 

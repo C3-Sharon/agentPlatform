@@ -6,6 +6,8 @@ import com.sharon.agentplatform.plugin.core.LoadedPluginSkill;
 import com.sharon.agentplatform.plugin.core.PluginLoadResult;
 import com.sharon.agentplatform.plugin.core.PluginSkillLoader;
 import com.sharon.agentplatform.plugin.dto.PluginPackageResponse;
+import com.sharon.agentplatform.plugin.dto.PluginPreviewResponse;
+import com.sharon.agentplatform.plugin.dto.PluginPreviewSkillResponse;
 import com.sharon.agentplatform.plugin.dto.PluginRuntimeResponse;
 import com.sharon.agentplatform.plugin.dto.PluginSkillResponse;
 import com.sharon.agentplatform.plugin.entity.PluginPackageEntity;
@@ -74,6 +76,59 @@ public class PluginSkillService {
 
     public List<LoadedPluginSkill> uploadAndLoad(MultipartFile file) {
         return uploadAndLoadWithPluginId(file).loadedSkills();
+    }
+
+    public PluginPreviewResponse previewPlugin(MultipartFile file) {
+        validateFile(file);
+
+        PluginPreviewResponse response = new PluginPreviewResponse();
+        response.setFileName(file.getOriginalFilename());
+
+        Path tempJar = null;
+        PluginLoadResult loadResult = null;
+        try (InputStream inputStream = file.getInputStream()) {
+            tempJar = Files.createTempFile("plugin-preview-", ".jar").toAbsolutePath().normalize();
+            Files.copy(inputStream, tempJar, StandardCopyOption.REPLACE_EXISTING);
+
+            PluginManifest manifest = pluginManifestLoader.load(tempJar).orElse(null);
+            response.setManifest(manifest);
+            loadResult = pluginSkillLoader.loadWithClassLoader(tempJar);
+            List<Skill> skills = loadResult.getLoadedSkills();
+
+            for (Skill skill : skills) {
+                SkillMetadata metadata = skill.metadata();
+                response.getSkills().add(toPreviewSkillResponse(
+                        skill,
+                        findManifestSkill(manifest, metadata == null ? null : metadata.getName())
+                ));
+            }
+
+            try {
+                pluginSkillValidator.validateForBootstrap(skills, manifest);
+            } catch (BusinessException exception) {
+                response.getErrors().add(exception.getMessage());
+            }
+
+            for (PluginPreviewSkillResponse skill : response.getSkills()) {
+                if (Boolean.TRUE.equals(skill.getConflict())) {
+                    response.getErrors().add(skill.getConflictMessage());
+                }
+            }
+
+            response.setInstallable(response.getErrors().isEmpty());
+            return response;
+        } catch (BusinessException exception) {
+            response.getErrors().add(exception.getMessage());
+            response.setInstallable(false);
+            return response;
+        } catch (IOException | RuntimeException exception) {
+            response.getErrors().add("Failed to preview plugin jar: " + exception.getMessage());
+            response.setInstallable(false);
+            return response;
+        } finally {
+            closeLoadResult(loadResult);
+            deleteTempJar(tempJar);
+        }
     }
 
     public LoadedPluginUpload uploadAndLoadWithPluginId(MultipartFile file) {
@@ -280,6 +335,17 @@ public class PluginSkillService {
         }
     }
 
+    private void deleteTempJar(Path tempJar) {
+        if (tempJar == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(tempJar);
+        } catch (IOException exception) {
+            log.warn("Failed to delete plugin preview temp jar: {}", tempJar, exception);
+        }
+    }
+
     private void unregisterSkills(List<String> skillNames) {
         if (skillNames == null || skillNames.isEmpty()) {
             return;
@@ -409,6 +475,29 @@ public class PluginSkillService {
         response.setMarketMetadata(parseJson(entity.getMarketMetadataJson()));
         response.setCreatedAt(entity.getCreatedAt());
         response.setUpdatedAt(entity.getUpdatedAt());
+        return response;
+    }
+
+    private PluginPreviewSkillResponse toPreviewSkillResponse(Skill skill, PluginManifestSkill manifestSkill) {
+        SkillMetadata metadata = skill.metadata();
+        PluginPreviewSkillResponse response = new PluginPreviewSkillResponse();
+        response.setClassName(skill.getClass().getName());
+        response.setMarketMetadata(manifestSkill);
+        if (metadata == null) {
+            response.setConflict(false);
+            return response;
+        }
+
+        response.setSkillName(metadata.getName());
+        response.setDisplayName(metadata.getDisplayName());
+        response.setDescription(metadata.getDescription());
+        response.setVersion(metadata.getVersion());
+        response.setParameterSchema(metadata.getParameterSchema());
+        response.setDependencies(metadata.getDependencies());
+
+        boolean conflict = metadata.getName() != null && skillRegistry.getSkill(metadata.getName()).isPresent();
+        response.setConflict(conflict);
+        response.setConflictMessage(conflict ? "Skill name already exists: " + metadata.getName() : null);
         return response;
     }
 

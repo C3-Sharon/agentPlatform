@@ -3,6 +3,7 @@ package com.sharon.agentplatform.plugin.controller;
 import com.sharon.agentplatform.common.ApiResponse;
 import com.sharon.agentplatform.plugin.core.LoadedPluginSkill;
 import com.sharon.agentplatform.plugin.dto.PluginPackageResponse;
+import com.sharon.agentplatform.plugin.dto.PluginPreviewResponse;
 import com.sharon.agentplatform.plugin.dto.PluginRuntimeResponse;
 import com.sharon.agentplatform.plugin.dto.PluginUploadResponse;
 import com.sharon.agentplatform.plugin.service.PluginSkillService;
@@ -35,6 +36,11 @@ public class PluginSkillController {
         response.setPluginId(upload.pluginId());
         response.setLoadedSkills(loadedSkills);
         return ApiResponse.success(response);
+    }
+
+    @PostMapping("/skills/preview")
+    public ApiResponse<PluginPreviewResponse> preview(@RequestParam("file") MultipartFile file) {
+        return ApiResponse.success(pluginSkillService.previewPlugin(file));
     }
 
     @GetMapping

@@ -44,6 +44,10 @@ public class PluginSkillEntity {
     @Column(name = "metadata_json", columnDefinition = "LONGTEXT")
     private String metadataJson;
 
+    @Lob
+    @Column(name = "market_metadata_json", columnDefinition = "LONGTEXT")
+    private String marketMetadataJson;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -68,6 +72,8 @@ public class PluginSkillEntity {
     public void setEnabled(Boolean enabled) { this.enabled = enabled; }
     public String getMetadataJson() { return metadataJson; }
     public void setMetadataJson(String metadataJson) { this.metadataJson = metadataJson; }
+    public String getMarketMetadataJson() { return marketMetadataJson; }
+    public void setMarketMetadataJson(String marketMetadataJson) { this.marketMetadataJson = marketMetadataJson; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

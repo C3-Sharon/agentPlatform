@@ -10,6 +10,9 @@ import com.sharon.agentplatform.plugin.dto.PluginRuntimeResponse;
 import com.sharon.agentplatform.plugin.dto.PluginSkillResponse;
 import com.sharon.agentplatform.plugin.entity.PluginPackageEntity;
 import com.sharon.agentplatform.plugin.entity.PluginSkillEntity;
+import com.sharon.agentplatform.plugin.manifest.PluginManifest;
+import com.sharon.agentplatform.plugin.manifest.PluginManifestLoader;
+import com.sharon.agentplatform.plugin.manifest.PluginManifestSkill;
 import com.sharon.agentplatform.plugin.repository.PluginPackageRepository;
 import com.sharon.agentplatform.plugin.repository.PluginSkillRepository;
 import com.sharon.agentplatform.plugin.runtime.PluginRuntime;
@@ -47,6 +50,7 @@ public class PluginSkillService {
     private final PluginSkillRepository pluginSkillRepository;
     private final PluginSkillValidator pluginSkillValidator;
     private final PluginRuntimeRegistry pluginRuntimeRegistry;
+    private final PluginManifestLoader pluginManifestLoader;
     private final ObjectMapper objectMapper;
     private final Path pluginDir = Path.of("data", "plugins").toAbsolutePath().normalize();
 
@@ -56,6 +60,7 @@ public class PluginSkillService {
                               PluginSkillRepository pluginSkillRepository,
                               PluginSkillValidator pluginSkillValidator,
                               PluginRuntimeRegistry pluginRuntimeRegistry,
+                              PluginManifestLoader pluginManifestLoader,
                               ObjectMapper objectMapper) {
         this.pluginSkillLoader = pluginSkillLoader;
         this.skillRegistry = skillRegistry;
@@ -63,6 +68,7 @@ public class PluginSkillService {
         this.pluginSkillRepository = pluginSkillRepository;
         this.pluginSkillValidator = pluginSkillValidator;
         this.pluginRuntimeRegistry = pluginRuntimeRegistry;
+        this.pluginManifestLoader = pluginManifestLoader;
         this.objectMapper = objectMapper;
     }
 
@@ -94,10 +100,12 @@ public class PluginSkillService {
         try (InputStream inputStream = file.getInputStream()) {
             Files.copy(inputStream, jarPath, StandardCopyOption.REPLACE_EXISTING);
 
+            PluginManifest manifest = pluginManifestLoader.load(jarPath).orElse(null);
+            pluginPackage.setManifestJson(toNullableJson(manifest));
             loadResult = pluginSkillLoader.loadWithClassLoader(jarPath);
             List<Skill> skills = loadResult.getLoadedSkills();
-            pluginSkillValidator.validateForUpload(skills);
-            List<LoadedPluginSkill> loadedPluginSkills = registerAndPersistSkills(pluginId, jarPath, skills, true);
+            pluginSkillValidator.validateForUpload(skills, manifest);
+            List<LoadedPluginSkill> loadedPluginSkills = registerAndPersistSkills(pluginId, jarPath, skills, manifest, true);
             registeredSkillNames = loadedPluginSkills.stream()
                     .map(LoadedPluginSkill::getSkillName)
                     .toList();
@@ -194,9 +202,10 @@ public class PluginSkillService {
         List<String> registeredSkillNames = new ArrayList<>();
         try {
             loadResult = pluginSkillLoader.loadWithClassLoader(jarPath);
+            PluginManifest manifest = pluginManifestLoader.load(jarPath).orElse(null);
             List<Skill> skills = loadResult.getLoadedSkills();
-            pluginSkillValidator.validateForBootstrap(skills);
-            List<LoadedPluginSkill> loadedPluginSkills = registerAndPersistSkills(pluginPackage.getPluginId(), jarPath, skills, true);
+            pluginSkillValidator.validateForBootstrap(skills, manifest);
+            List<LoadedPluginSkill> loadedPluginSkills = registerAndPersistSkills(pluginPackage.getPluginId(), jarPath, skills, manifest, true);
             registeredSkillNames = loadedPluginSkills.stream()
                     .map(LoadedPluginSkill::getSkillName)
                     .toList();
@@ -204,6 +213,7 @@ public class PluginSkillService {
             LocalDateTime loadedAt = LocalDateTime.now();
             pluginPackage.setStatus(STATUS_ENABLED);
             pluginPackage.setErrorMessage(null);
+            pluginPackage.setManifestJson(toNullableJson(manifest));
             pluginPackage.setLoadedAt(loadedAt);
             pluginPackage.setUpdatedAt(loadedAt);
             pluginPackageRepository.save(pluginPackage);
@@ -216,7 +226,11 @@ public class PluginSkillService {
         }
     }
 
-    private List<LoadedPluginSkill> registerAndPersistSkills(String pluginId, Path jarPath, List<Skill> skills, boolean enabled) {
+    private List<LoadedPluginSkill> registerAndPersistSkills(String pluginId,
+                                                             Path jarPath,
+                                                             List<Skill> skills,
+                                                             PluginManifest manifest,
+                                                             boolean enabled) {
         List<LoadedPluginSkill> loadedPluginSkills = new ArrayList<>();
         List<String> registeredSkillNames = new ArrayList<>();
         try {
@@ -226,7 +240,7 @@ public class PluginSkillService {
                 registeredSkillNames.add(skillName);
                 LoadedPluginSkill loadedPluginSkill = toLoadedPluginSkill(skill, jarPath);
                 loadedPluginSkills.add(loadedPluginSkill);
-                upsertPluginSkill(pluginId, skill, enabled);
+                upsertPluginSkill(pluginId, skill, findManifestSkill(manifest, skillName), enabled);
                 log.info("Registered plugin skill: {}", skillName);
             }
         } catch (RuntimeException exception) {
@@ -291,7 +305,7 @@ public class PluginSkillService {
         }
     }
 
-    private void upsertPluginSkill(String pluginId, Skill skill, boolean enabled) {
+    private void upsertPluginSkill(String pluginId, Skill skill, PluginManifestSkill manifestSkill, boolean enabled) {
         SkillMetadata metadata = skill.metadata();
         LocalDateTime now = LocalDateTime.now();
         PluginSkillEntity entity = pluginSkillRepository.findByPluginIdAndSkillName(pluginId, metadata.getName())
@@ -309,6 +323,7 @@ public class PluginSkillService {
         entity.setClassName(skill.getClass().getName());
         entity.setEnabled(enabled);
         entity.setMetadataJson(toJson(metadata));
+        entity.setMarketMetadataJson(toNullableJson(manifestSkill));
         entity.setUpdatedAt(now);
         pluginSkillRepository.save(entity);
     }
@@ -370,6 +385,7 @@ public class PluginSkillService {
         response.setJarPath(entity.getJarPath());
         response.setStatus(entity.getStatus());
         response.setErrorMessage(entity.getErrorMessage());
+        response.setManifest(parseJson(entity.getManifestJson()));
         response.setUploadedAt(entity.getUploadedAt());
         response.setLoadedAt(entity.getLoadedAt());
         response.setCreatedAt(entity.getCreatedAt());
@@ -390,6 +406,7 @@ public class PluginSkillService {
         response.setClassName(entity.getClassName());
         response.setEnabled(entity.getEnabled());
         response.setMetadata(parseJson(entity.getMetadataJson()));
+        response.setMarketMetadata(parseJson(entity.getMarketMetadataJson()));
         response.setCreatedAt(entity.getCreatedAt());
         response.setUpdatedAt(entity.getUpdatedAt());
         return response;
@@ -412,6 +429,21 @@ public class PluginSkillService {
         } catch (Exception exception) {
             return String.valueOf(value);
         }
+    }
+
+    private String toNullableJson(Object value) {
+        return value == null ? null : toJson(value);
+    }
+
+    private PluginManifestSkill findManifestSkill(PluginManifest manifest, String skillName) {
+        if (manifest == null || manifest.getSkills() == null || skillName == null) {
+            return null;
+        }
+        return manifest.getSkills()
+                .stream()
+                .filter(skill -> skillName.equals(skill.getName()))
+                .findFirst()
+                .orElse(null);
     }
 
     private Object parseJson(String json) {

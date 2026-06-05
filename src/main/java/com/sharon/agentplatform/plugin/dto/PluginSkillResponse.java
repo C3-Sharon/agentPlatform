@@ -12,6 +12,7 @@ public class PluginSkillResponse {
     private String className;
     private Boolean enabled;
     private Object metadata;
+    private Object marketMetadata;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -31,6 +32,8 @@ public class PluginSkillResponse {
     public void setEnabled(Boolean enabled) { this.enabled = enabled; }
     public Object getMetadata() { return metadata; }
     public void setMetadata(Object metadata) { this.metadata = metadata; }
+    public Object getMarketMetadata() { return marketMetadata; }
+    public void setMarketMetadata(Object marketMetadata) { this.marketMetadata = marketMetadata; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

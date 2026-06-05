@@ -103,5 +103,5 @@ agent-platform:
 
 agentplatform:
   pending-skill:
-    store-type: redis
+    store-type: memory
     ttl-minutes: 30

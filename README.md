@@ -22,6 +22,7 @@
 - Skill Registry 与统一 Skill 启用/禁用
 - Plugin Skill Market：Jar 上传、热加载、持久化、启用/禁用、启动恢复
 - PluginSkillValidator 插件安装校验
+- Skill Manifest：支持插件 Jar 内携带 `META-INF/agent-skill.json`，补充市场分类、标签、示例和权限声明
 - PluginRuntimeRegistry 插件运行时与 URLClassLoader 生命周期管理
 - MCP Tool Registry、REST MCP 接口、JSON-RPC Adapter
 - External MCP HTTP Client：注册、同步和调用外部 MCP Server 工具
@@ -41,6 +42,7 @@
 | Skill 元数据 | `name` / `description` / `parameterSchema` / `version` / `dependencies` | 已完成     |
 | Skill 启用/禁用 | 插件包维度 + 单 Skill 维度逻辑启用/禁用 | 已完成     |
 | 插件安装校验 | `PluginSkillValidator` 校验 Skill 与 metadata | 已完成     |
+| Skill 市场发现 | `GET /api/skills/market` 聚合内置 Skill、插件 Skill、插件状态、runtime 状态、调用统计和 manifest 市场元数据 | MVP 已完成 |
 | 插件运行时生命周期 | `PluginRuntimeRegistry` 管理插件运行时，禁用插件时关闭 `URLClassLoader` | MVP 已完成 |
 | MCP 兼容 | `tools/list`、`tools/call`、JSON-RPC Adapter、External MCP Client | MVP 已完成 |
 | 外部 MCP Server | 独立 `mcp-demo-server`，支持注册、同步、调用 | 已完成     |
@@ -304,6 +306,7 @@ Skill 是 Agent 可调用能力的标准单位。每个 Skill 暴露：
 - `POST /api/skills/{name}/call`
 - `POST /api/skills/{name}/enable`
 - `POST /api/skills/{name}/disable`
+- `GET /api/skills/market`
 - `GET /api/skills/stats`
 
 Skill 统计：
@@ -328,6 +331,8 @@ Skill 统计：
 - 通过 public 无参构造器实例化
 - 注册到 `SkillRegistry`
 - 持久化到 `plugin_package` / `plugin_skill`
+- 可选读取 Jar 内 `META-INF/agent-skill.json`，保存到 `manifest_json` / `market_metadata_json`
+- `/api/skills/market` 用于展示市场发现视图，包括插件来源、状态、runtime、分类、标签、示例、权限声明和调用统计
 - 支持插件包 enable / disable
 - 支持服务启动时自动恢复 `ENABLED` 插件
 - 每个插件包运行时维护独立 `PluginRuntime`
@@ -365,6 +370,8 @@ Skill 统计：
 - `metadata.parameterSchema` 不能为 null
 - 同一个 Jar 内 `skillName` 不能重复
 - 上传新 Jar 时，不允许覆盖当前已注册的 `skillName`
+- 如果 Jar 内包含 `META-INF/agent-skill.json`，manifest 中声明的 skill 必须能在当前 Jar 中加载出来
+- manifest 中不能重复声明同一个 skillName
 
 失败行为：
 
@@ -712,6 +719,22 @@ D:\agent\mcp-demo-server
 - 支持 `tools/list`、`tools/call`
 - 工具：`demo.echo`、`demo.uppercase`
 
+### 8.6 skill-manifest-demo
+
+路径示例：
+
+```text
+D:\agent\skill-manifest-demo
+```
+
+说明：
+
+- Skill：`manifest_demo`
+- 用于验证插件 Jar 内 `META-INF/agent-skill.json`
+- 不依赖外部网络
+- 不依赖 API Key
+- 适合测试 Skill Market manifest、category、tags、examples、permissions 等市场发现字段
+
 ## 9. Skill 开发指南
 
 ### 9.1 开发步骤
@@ -723,13 +746,15 @@ D:\agent\mcp-demo-server
 5. 提供 public 无参构造器。
 6. 编写完整 `SkillMetadata`。
 7. 编写 `parameterSchema`，声明 required 参数。
-8. 在 `execute(SkillContext context)` 中读取参数并返回 `SkillResult`。
-9. 执行 `mvn clean package`。
-10. 通过 `POST /api/plugins/skills/upload` 上传 Jar。
-11. 通过 `GET /api/skills` 验证注册结果。
-12. 通过 `/api/skills/{skillName}/call` 或 `/api/chat` 调用。
-13. 通过 `GET /api/skills/stats` 查看调用统计。
-14. 通过 `/api/skills/{skillName}/disable` / `enable` 验证启用禁用。
+8. 可选添加 `src/main/resources/META-INF/agent-skill.json`，补充市场分类、标签、示例和权限声明。
+9. 在 `execute(SkillContext context)` 中读取参数并返回 `SkillResult`。
+10. 执行 `mvn clean package`。
+11. 通过 `POST /api/plugins/skills/upload` 上传 Jar。
+12. 通过 `GET /api/skills` 验证注册结果。
+13. 通过 `GET /api/skills/market` 验证市场发现信息。
+14. 通过 `/api/skills/{skillName}/call` 或 `/api/chat` 调用。
+15. 通过 `GET /api/skills/stats` 查看调用统计。
+16. 通过 `/api/skills/{skillName}/disable` / `enable` 验证启用禁用。
 
 ### 9.2 Maven 结构示意
 
@@ -737,10 +762,13 @@ D:\agent\mcp-demo-server
 my-skill/
   pom.xml
   src/main/java/com/example/plugin/MySkill.java
+  src/main/resources/META-INF/agent-skill.json
   README.md
 ```
 
 `pom.xml` 可以参考已有插件项目，核心是引用主项目 Skill API，并将其作为 `provided` 或本地系统依赖。
+
+`META-INF/agent-skill.json` 是可选 manifest，用于补充 Skill 市场展示信息，不替代 `Skill.metadata()`。
 
 ### 9.3 Skill 代码示意
 
@@ -1013,6 +1041,7 @@ POST /api/chat
 
 ```http
 GET /api/skills
+GET /api/skills/market
 GET /api/skills/stats
 POST /api/skills/calculator/call
 POST /api/skills/calculator/disable
@@ -1158,7 +1187,8 @@ CLI 脚本在部分 Windows 控制台里可能出现中文编码问题。建议�
 - 插件 Skill 不支持 Spring Bean 注入
 - 插件禁用会关闭 `URLClassLoader` 并移除平台引用，但不保证 JVM 立即卸载插件类
 - 插件不做依赖冲突治理和安全沙箱
-- Skill 市场没有权限系统
+- Skill Manifest 中的 permissions 当前是声明和展示信息，尚未做运行时权限拦截
+- Skill 市场没有完整权限系统
 - Vision Chat 不支持音频/视频
 - Web Console 是静态控制台，不是完整前端系统
 - Agent Team 尚未实现

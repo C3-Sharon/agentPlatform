@@ -10,6 +10,7 @@ public class PluginPackageResponse {
     private String jarPath;
     private String status;
     private String errorMessage;
+    private Object manifest;
     private LocalDateTime uploadedAt;
     private LocalDateTime loadedAt;
     private LocalDateTime createdAt;
@@ -26,6 +27,8 @@ public class PluginPackageResponse {
     public void setStatus(String status) { this.status = status; }
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+    public Object getManifest() { return manifest; }
+    public void setManifest(Object manifest) { this.manifest = manifest; }
     public LocalDateTime getUploadedAt() { return uploadedAt; }
     public void setUploadedAt(LocalDateTime uploadedAt) { this.uploadedAt = uploadedAt; }
     public LocalDateTime getLoadedAt() { return loadedAt; }

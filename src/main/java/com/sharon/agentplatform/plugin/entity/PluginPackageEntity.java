@@ -34,6 +34,10 @@ public class PluginPackageEntity {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
+    @Lob
+    @Column(name = "manifest_json", columnDefinition = "LONGTEXT")
+    private String manifestJson;
+
     @Column(name = "uploaded_at")
     private LocalDateTime uploadedAt;
 
@@ -58,6 +62,8 @@ public class PluginPackageEntity {
     public void setStatus(String status) { this.status = status; }
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+    public String getManifestJson() { return manifestJson; }
+    public void setManifestJson(String manifestJson) { this.manifestJson = manifestJson; }
     public LocalDateTime getUploadedAt() { return uploadedAt; }
     public void setUploadedAt(LocalDateTime uploadedAt) { this.uploadedAt = uploadedAt; }
     public LocalDateTime getLoadedAt() { return loadedAt; }

@@ -50,7 +50,7 @@
 | Skill Manifest 完整度检查 | `PluginManifestCompletenessChecker` 在 preview 阶段提示缺失的推荐字段 | MVP 已完成 |
 | 插件运行时生命周期 | `PluginRuntimeRegistry` 管理插件运行时，禁用插件时关闭 `URLClassLoader` | MVP 已完成 |
 | 插件受控上下文 | `PluginContext` / `PluginContextAware` 为插件提供受控 SPI，支持权限检查和内部 MCP 调用，不开放 Spring Bean 注入 | MVP 已完成 |
-| MCP 兼容 | `tools/list`、`tools/call`、JSON-RPC Adapter、External MCP Client | MVP 已完成 |
+| MCP 兼容 | `initialize`、`ping`、`tools/list`、`tools/call`、`resources/list`、`resources/read`、`prompts/list`、`prompts/get`、JSON-RPC Adapter、External MCP Client | MVP 已完成 |
 | 外部 MCP Server | 独立 `mcp-demo-server`，支持注册、同步、调用 | 已完成     |
 | 3 个不同方向 Skill 演示 | `calculator`、`weather`、`file_search`、`resume_optimize`、`text_reverse`、`text_insight`、`mcp_echo_client` 等 | 已完成     |
 | 简单管理界面 | 静态 Web Console + PowerShell CLI scripts | 已完成     |
@@ -432,8 +432,14 @@ REST 接口：
 
 支持 method：
 
+- `initialize`
+- `ping`
 - `tools/list`
 - `tools/call`
+- `resources/list`
+- `resources/read`
+- `prompts/list`
+- `prompts/get`
 
 示例：
 
@@ -481,7 +487,9 @@ REST 接口：
 - 这是 HTTP JSON-RPC 风格 MVP
 - 不支持 stdio transport
 - 不支持 SSE / Streamable HTTP
-- 不实现完整 `initialize` / `capabilities` 协议
+- 已支持 `initialize` / `ping` MVP，但不是完整 MCP 生命周期和 capabilities 协议
+- 已支持 `resources/list` / `resources/read` MVP，但当前只暴露平台内置只读资源
+- 已支持 `prompts/list` / `prompts/get` MVP，但当前是静态提示模板，不改变 AgentRuntime 真实提示词
 - 不管理外部 MCP Server 进程生命周期
 - 不支持 OAuth
 
@@ -1260,7 +1268,9 @@ CLI 脚本在部分 Windows 控制台里可能出现中文编码问题。建议�
 
 - MCP 是 HTTP JSON-RPC 风格 MVP，不是完整标准 MCP transport
 - 不支持 stdio、SSE / Streamable HTTP、OAuth
-- 不实现完整 MCP `initialize` / `capabilities`
+- 已支持 MCP `initialize` / `ping` MVP，但不是完整 MCP 生命周期和 capabilities 协议
+- 已支持 MCP `resources/list` / `resources/read` MVP，但当前只读平台内置资源
+- 已支持 MCP `prompts/list` / `prompts/get` MVP，但当前仅暴露静态提示模板
 - External MCP 不管理外部 server 进程生命周期
 - 插件 Skill 不支持 Spring Bean 注入
 - 插件禁用会关闭 `URLClassLoader` 并移除平台引用，但不保证 JVM 立即卸载插件类

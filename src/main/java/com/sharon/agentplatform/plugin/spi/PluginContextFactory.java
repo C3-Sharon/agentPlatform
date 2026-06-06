@@ -1,5 +1,6 @@
 package com.sharon.agentplatform.plugin.spi;
 
+import com.sharon.agentplatform.mcp.core.McpToolRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,9 +15,12 @@ public class PluginContextFactory {
     private static final Logger log = LoggerFactory.getLogger(PluginContextFactory.class);
 
     private final String platformVersion;
+    private final McpToolRegistry mcpToolRegistry;
 
-    public PluginContextFactory(@Value("${agentplatform.platform-version:0.0.1}") String platformVersion) {
+    public PluginContextFactory(@Value("${agentplatform.platform-version:0.0.1}") String platformVersion,
+                                McpToolRegistry mcpToolRegistry) {
         this.platformVersion = platformVersion;
+        this.mcpToolRegistry = mcpToolRegistry;
     }
 
     public PluginContext create(String pluginId, Path jarPath) {
@@ -30,6 +34,7 @@ public class PluginContextFactory {
         context.setPlatformVersion(platformVersion);
         context.setLogger(new Slf4jPluginLogger(pluginId));
         context.setPermissions(permissions);
+        context.setMcpClient(new DefaultPluginMcpClient(pluginId, context, mcpToolRegistry));
         return context;
     }
 

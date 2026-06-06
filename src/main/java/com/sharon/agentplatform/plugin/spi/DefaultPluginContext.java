@@ -10,6 +10,7 @@ public class DefaultPluginContext implements PluginContext {
     private String jarPath;
     private String platformVersion;
     private PluginLogger logger;
+    private PluginMcpClient mcpClient;
     private List<String> permissions = new ArrayList<>();
 
     public String getPluginId() {
@@ -42,6 +43,14 @@ public class DefaultPluginContext implements PluginContext {
 
     public void setLogger(PluginLogger logger) {
         this.logger = logger;
+    }
+
+    public PluginMcpClient getMcpClient() {
+        return mcpClient;
+    }
+
+    public void setMcpClient(PluginMcpClient mcpClient) {
+        this.mcpClient = mcpClient;
     }
 
     public List<String> getPermissions() {

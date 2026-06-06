@@ -26,7 +26,7 @@
 - Plugin Permission Declaration：标准化插件权限声明并展示风险等级
 - Skill Manifest Completeness：预览阶段检查 manifest 推荐字段并返回 warnings
 - PluginRuntimeRegistry 插件运行时与 URLClassLoader 生命周期管理
-- PluginContext / SPI：向插件 Skill 注入受控上下文，提供 pluginId、platformVersion、jarPath 和插件日志
+- PluginContext / SPI：向插件 Skill 注入受控上下文，提供插件日志、权限检查和内部 MCP Client
 - MCP Tool Registry、REST MCP 接口、JSON-RPC Adapter
 - External MCP HTTP Client：注册、同步和调用外部 MCP Server 工具
 - Web 控制台与 PowerShell CLI 控制台
@@ -49,7 +49,7 @@
 | 插件权限声明 | `PluginPermissionPolicy` 标准化 permissions 并返回风险等级，`PluginContext` 支持运行时权限检查 | MVP 已完成 |
 | Skill Manifest 完整度检查 | `PluginManifestCompletenessChecker` 在 preview 阶段提示缺失的推荐字段 | MVP 已完成 |
 | 插件运行时生命周期 | `PluginRuntimeRegistry` 管理插件运行时，禁用插件时关闭 `URLClassLoader` | MVP 已完成 |
-| 插件受控上下文 | `PluginContext` / `PluginContextAware` 为插件提供受控 SPI，不开放 Spring Bean 注入 | MVP 已完成 |
+| 插件受控上下文 | `PluginContext` / `PluginContextAware` 为插件提供受控 SPI，支持权限检查和内部 MCP 调用，不开放 Spring Bean 注入 | MVP 已完成 |
 | MCP 兼容 | `tools/list`、`tools/call`、JSON-RPC Adapter、External MCP Client | MVP 已完成 |
 | 外部 MCP Server | 独立 `mcp-demo-server`，支持注册、同步、调用 | 已完成     |
 | 3 个不同方向 Skill 演示 | `calculator`、`weather`、`file_search`、`resume_optimize`、`text_reverse`、`text_insight`、`mcp_echo_client` 等 | 已完成     |
@@ -347,8 +347,9 @@ Skill 统计：
 - `PluginRuntimeRegistry` 管理当前 JVM 中已加载的插件 runtime
 - 禁用插件时注销对应 Skill、关闭 `URLClassLoader`、移除 runtime 引用
 - 插件可选实现 `PluginContextAware`，平台加载时注入 `PluginContext`
-- 当前 `PluginContext` 暴露 `pluginId`、`jarPath`、`platformVersion`、`PluginLogger` 和 permissions
+- 当前 `PluginContext` 暴露 `pluginId`、`jarPath`、`platformVersion`、`PluginLogger`、permissions 和 `PluginMcpClient`
 - `PluginContext` 支持 `hasPermission` / `requirePermission`，用于插件内部进行受控权限检查
+- `PluginMcpClient` 支持插件在声明 `mcp:call` 后调用内部 `McpToolRegistry`
 - `PluginContext` 是受控 SPI，不等同于开放 Spring Bean 注入
 
 插件主要接口：
@@ -909,11 +910,12 @@ public class MySkill implements Skill {
 - `PluginLogger`
 - `permissions`
 - `hasPermission` / `requirePermission`
+- `PluginMcpClient`，当前用于调用内部 `McpToolRegistry`
 
 后续可继续通过 `PluginContext` / SPI 暴露受控平台能力，例如：
 
 - `ModelClient`
-- `McpToolClient`
+- External MCP Client
 - `ResourceClient`
 - `ConfigClient`
 
@@ -1263,7 +1265,8 @@ CLI 脚本在部分 Windows 控制台里可能出现中文编码问题。建议�
 - 插件 Skill 不支持 Spring Bean 注入
 - 插件禁用会关闭 `URLClassLoader` 并移除平台引用，但不保证 JVM 立即卸载插件类
 - 插件不做依赖冲突治理和安全沙箱
-- Skill Manifest 中的 permissions 已可注入 `PluginContext` 做运行时权限检查，但还不是完整权限沙箱
+- Skill Manifest 中的 permissions 已可注入 `PluginContext` 做运行时权限检查，`mcp:call` 可保护内部 MCP 调用，但还不是完整权限沙箱
+- `PluginMcpClient` 当前只支持内部 `McpToolRegistry`，暂未桥接 External MCP tools
 - Skill 市场没有完整权限系统
 - Vision Chat 不支持音频/视频
 - Web Console 是静态控制台，不是完整前端系统

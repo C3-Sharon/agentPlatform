@@ -12,6 +12,8 @@ public interface PluginContext {
 
     PluginLogger getLogger();
 
+    PluginMcpClient getMcpClient();
+
     List<String> getPermissions();
 
     boolean hasPermission(String permission);

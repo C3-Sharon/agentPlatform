@@ -15,6 +15,7 @@ import com.sharon.agentplatform.plugin.entity.PluginSkillEntity;
 import com.sharon.agentplatform.plugin.manifest.PluginManifest;
 import com.sharon.agentplatform.plugin.manifest.PluginManifestLoader;
 import com.sharon.agentplatform.plugin.manifest.PluginManifestSkill;
+import com.sharon.agentplatform.plugin.permission.PluginPermissionPolicy;
 import com.sharon.agentplatform.plugin.repository.PluginPackageRepository;
 import com.sharon.agentplatform.plugin.repository.PluginSkillRepository;
 import com.sharon.agentplatform.plugin.runtime.PluginRuntime;
@@ -53,6 +54,7 @@ public class PluginSkillService {
     private final PluginSkillValidator pluginSkillValidator;
     private final PluginRuntimeRegistry pluginRuntimeRegistry;
     private final PluginManifestLoader pluginManifestLoader;
+    private final PluginPermissionPolicy pluginPermissionPolicy;
     private final ObjectMapper objectMapper;
     private final Path pluginDir = Path.of("data", "plugins").toAbsolutePath().normalize();
 
@@ -63,6 +65,7 @@ public class PluginSkillService {
                               PluginSkillValidator pluginSkillValidator,
                               PluginRuntimeRegistry pluginRuntimeRegistry,
                               PluginManifestLoader pluginManifestLoader,
+                              PluginPermissionPolicy pluginPermissionPolicy,
                               ObjectMapper objectMapper) {
         this.pluginSkillLoader = pluginSkillLoader;
         this.skillRegistry = skillRegistry;
@@ -71,6 +74,7 @@ public class PluginSkillService {
         this.pluginSkillValidator = pluginSkillValidator;
         this.pluginRuntimeRegistry = pluginRuntimeRegistry;
         this.pluginManifestLoader = pluginManifestLoader;
+        this.pluginPermissionPolicy = pluginPermissionPolicy;
         this.objectMapper = objectMapper;
     }
 
@@ -97,10 +101,14 @@ public class PluginSkillService {
 
             for (Skill skill : skills) {
                 SkillMetadata metadata = skill.metadata();
+                PluginManifestSkill manifestSkill = findManifestSkill(manifest, metadata == null ? null : metadata.getName());
                 response.getSkills().add(toPreviewSkillResponse(
                         skill,
-                        findManifestSkill(manifest, metadata == null ? null : metadata.getName())
+                        manifestSkill
                 ));
+                if (manifestSkill != null) {
+                    response.getWarnings().addAll(pluginPermissionPolicy.warnings(manifestSkill.getPermissions()));
+                }
             }
 
             try {
@@ -494,6 +502,11 @@ public class PluginSkillService {
         response.setVersion(metadata.getVersion());
         response.setParameterSchema(metadata.getParameterSchema());
         response.setDependencies(metadata.getDependencies());
+
+        if (manifestSkill != null) {
+            response.setPermissionDetails(pluginPermissionPolicy.describe(manifestSkill.getPermissions()));
+            response.setPermissionRiskLevel(pluginPermissionPolicy.highestRiskLevel(manifestSkill.getPermissions()));
+        }
 
         boolean conflict = metadata.getName() != null && skillRegistry.getSkill(metadata.getName()).isPresent();
         response.setConflict(conflict);

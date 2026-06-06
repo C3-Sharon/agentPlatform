@@ -24,6 +24,8 @@ public class SkillMarketResponse {
     private List<String> tags;
     private Object examples;
     private List<String> permissions;
+    private Object permissionDetails;
+    private String permissionRiskLevel;
     private Object parameterSchema;
     private List<String> dependencies;
     private SkillStatsResponse stats;
@@ -180,6 +182,22 @@ public class SkillMarketResponse {
 
     public void setPermissions(List<String> permissions) {
         this.permissions = permissions;
+    }
+
+    public Object getPermissionDetails() {
+        return permissionDetails;
+    }
+
+    public void setPermissionDetails(Object permissionDetails) {
+        this.permissionDetails = permissionDetails;
+    }
+
+    public String getPermissionRiskLevel() {
+        return permissionRiskLevel;
+    }
+
+    public void setPermissionRiskLevel(String permissionRiskLevel) {
+        this.permissionRiskLevel = permissionRiskLevel;
     }
 
     public Object getParameterSchema() {

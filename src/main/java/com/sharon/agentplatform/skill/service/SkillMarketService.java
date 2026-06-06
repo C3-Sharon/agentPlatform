@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sharon.agentplatform.plugin.entity.PluginPackageEntity;
 import com.sharon.agentplatform.plugin.entity.PluginSkillEntity;
+import com.sharon.agentplatform.plugin.permission.PluginPermissionPolicy;
 import com.sharon.agentplatform.plugin.repository.PluginPackageRepository;
 import com.sharon.agentplatform.plugin.repository.PluginSkillRepository;
 import com.sharon.agentplatform.plugin.runtime.PluginRuntimeRegistry;
@@ -33,6 +34,7 @@ public class SkillMarketService {
     private final PluginSkillRepository pluginSkillRepository;
     private final PluginPackageRepository pluginPackageRepository;
     private final PluginRuntimeRegistry pluginRuntimeRegistry;
+    private final PluginPermissionPolicy pluginPermissionPolicy;
     private final ObjectMapper objectMapper;
 
     public SkillMarketService(SkillRegistry skillRegistry,
@@ -40,12 +42,14 @@ public class SkillMarketService {
                               PluginSkillRepository pluginSkillRepository,
                               PluginPackageRepository pluginPackageRepository,
                               PluginRuntimeRegistry pluginRuntimeRegistry,
+                              PluginPermissionPolicy pluginPermissionPolicy,
                               ObjectMapper objectMapper) {
         this.skillRegistry = skillRegistry;
         this.skillStatsService = skillStatsService;
         this.pluginSkillRepository = pluginSkillRepository;
         this.pluginPackageRepository = pluginPackageRepository;
         this.pluginRuntimeRegistry = pluginRuntimeRegistry;
+        this.pluginPermissionPolicy = pluginPermissionPolicy;
         this.objectMapper = objectMapper;
     }
 
@@ -189,7 +193,10 @@ public class SkillMarketService {
         response.setCategory(stringValue(marketMetadata.get("category")));
         response.setTags(toStringList(marketMetadata.get("tags")));
         response.setExamples(marketMetadata.get("examples"));
-        response.setPermissions(toStringList(marketMetadata.get("permissions")));
+        List<String> permissions = toStringList(marketMetadata.get("permissions"));
+        response.setPermissions(permissions);
+        response.setPermissionDetails(pluginPermissionPolicy.describe(permissions));
+        response.setPermissionRiskLevel(pluginPermissionPolicy.highestRiskLevel(permissions));
     }
 
     private List<String> toStringList(Object value) {

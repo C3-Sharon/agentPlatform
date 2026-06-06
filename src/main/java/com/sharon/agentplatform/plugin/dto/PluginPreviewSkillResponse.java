@@ -12,6 +12,8 @@ public class PluginPreviewSkillResponse {
     private Object parameterSchema;
     private List<String> dependencies;
     private Object marketMetadata;
+    private Object permissionDetails;
+    private String permissionRiskLevel;
     private Boolean conflict;
     private String conflictMessage;
 
@@ -77,6 +79,22 @@ public class PluginPreviewSkillResponse {
 
     public void setMarketMetadata(Object marketMetadata) {
         this.marketMetadata = marketMetadata;
+    }
+
+    public Object getPermissionDetails() {
+        return permissionDetails;
+    }
+
+    public void setPermissionDetails(Object permissionDetails) {
+        this.permissionDetails = permissionDetails;
+    }
+
+    public String getPermissionRiskLevel() {
+        return permissionRiskLevel;
+    }
+
+    public void setPermissionRiskLevel(String permissionRiskLevel) {
+        this.permissionRiskLevel = permissionRiskLevel;
     }
 
     public Boolean getConflict() {

@@ -11,6 +11,7 @@ import com.sharon.agentplatform.plugin.runtime.PluginRuntimeRegistry;
 import com.sharon.agentplatform.skill.core.Skill;
 import com.sharon.agentplatform.skill.core.SkillMetadata;
 import com.sharon.agentplatform.skill.core.SkillRegistry;
+import com.sharon.agentplatform.skill.dto.SkillMarketQuery;
 import com.sharon.agentplatform.skill.dto.SkillMarketResponse;
 import com.sharon.agentplatform.skill.dto.SkillStatsResponse;
 import org.springframework.stereotype.Service;
@@ -54,6 +55,10 @@ public class SkillMarketService {
     }
 
     public List<SkillMarketResponse> listMarketSkills() {
+        return listMarketSkills(new SkillMarketQuery());
+    }
+
+    public List<SkillMarketResponse> listMarketSkills(SkillMarketQuery query) {
         Map<String, SkillStatsResponse> statsBySkillName = skillStatsService.getSkillStats()
                 .stream()
                 .collect(Collectors.toMap(SkillStatsResponse::getSkillName, item -> item, (left, right) -> left));
@@ -89,7 +94,26 @@ public class SkillMarketService {
             market.put(pluginSkill.getSkillName(), response);
         }
 
-        return new ArrayList<>(market.values());
+        return market.values()
+                .stream()
+                .filter(skill -> matches(skill, query))
+                .toList();
+    }
+
+    private boolean matches(SkillMarketResponse skill, SkillMarketQuery query) {
+        if (query == null) {
+            return true;
+        }
+
+        return matchesText(skill.getSourceType(), query.getSourceType())
+                && matchesText(skill.getCategory(), query.getCategory())
+                && matchesTag(skill.getTags(), query.getTag())
+                && matchesBoolean(skill.getEnabled(), query.getEnabled())
+                && matchesBoolean(skill.getRegistered(), query.getRegistered())
+                && matchesBoolean(skill.getRuntimeLoaded(), query.getRuntimeLoaded())
+                && matchesText(skill.getPluginStatus(), query.getPluginStatus())
+                && matchesText(skill.getPermissionRiskLevel(), query.getPermissionRiskLevel())
+                && matchesKeyword(skill, query.getKeyword());
     }
 
     private SkillMarketResponse fromRegisteredSkill(Skill skill,
@@ -174,6 +198,7 @@ public class SkillMarketService {
             return;
         }
         Map<String, Object> manifest = parseMetadata(pluginPackage.getManifestJson());
+        response.setManifestSchemaVersion(stringValue(manifest.get("schemaVersion")));
         Object pluginValue = manifest.get("plugin");
         if (!(pluginValue instanceof Map<?, ?> plugin)) {
             return;
@@ -183,6 +208,9 @@ public class SkillMarketService {
         response.setPluginDisplayName(stringValue(plugin.get("displayName")));
         response.setPluginAuthor(stringValue(plugin.get("author")));
         response.setPluginHomepage(stringValue(plugin.get("homepage")));
+        response.setPluginLicense(stringValue(plugin.get("license")));
+        response.setPluginRepository(stringValue(plugin.get("repository")));
+        response.setPluginMinPlatformVersion(stringValue(plugin.get("minPlatformVersion")));
     }
 
     private void applyMarketMetadata(SkillMarketResponse response, Map<String, Object> marketMetadata) {
@@ -207,6 +235,58 @@ public class SkillMarketService {
                 .filter(Objects::nonNull)
                 .map(String::valueOf)
                 .toList();
+    }
+
+    private boolean matchesText(String actual, String expected) {
+        if (isBlank(expected)) {
+            return true;
+        }
+        return actual != null && actual.equalsIgnoreCase(expected.trim());
+    }
+
+    private boolean matchesBoolean(Boolean actual, Boolean expected) {
+        if (expected == null) {
+            return true;
+        }
+        return expected.equals(actual);
+    }
+
+    private boolean matchesTag(List<String> tags, String expectedTag) {
+        if (isBlank(expectedTag)) {
+            return true;
+        }
+        if (tags == null || tags.isEmpty()) {
+            return false;
+        }
+        String normalizedTag = expectedTag.trim();
+        return tags.stream().anyMatch(tag -> tag != null && tag.equalsIgnoreCase(normalizedTag));
+    }
+
+    private boolean matchesKeyword(SkillMarketResponse skill, String keyword) {
+        if (isBlank(keyword)) {
+            return true;
+        }
+        String normalizedKeyword = keyword.trim().toLowerCase();
+        return containsIgnoreCase(skill.getSkillName(), normalizedKeyword)
+                || containsIgnoreCase(skill.getDisplayName(), normalizedKeyword)
+                || containsIgnoreCase(skill.getDescription(), normalizedKeyword)
+                || containsIgnoreCase(skill.getPluginName(), normalizedKeyword)
+                || containsIgnoreCase(skill.getPluginDisplayName(), normalizedKeyword)
+                || containsIgnoreCase(skill.getCategory(), normalizedKeyword)
+                || listContainsIgnoreCase(skill.getTags(), normalizedKeyword);
+    }
+
+    private boolean containsIgnoreCase(String value, String normalizedKeyword) {
+        return value != null && value.toLowerCase().contains(normalizedKeyword);
+    }
+
+    private boolean listContainsIgnoreCase(List<String> values, String normalizedKeyword) {
+        if (values == null || values.isEmpty()) {
+            return false;
+        }
+        return values.stream()
+                .filter(Objects::nonNull)
+                .anyMatch(value -> value.toLowerCase().contains(normalizedKeyword));
     }
 
     private String stringValue(Object value) {

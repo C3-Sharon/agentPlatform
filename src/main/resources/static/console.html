@@ -275,6 +275,29 @@
 
         <div class="section">
           <p class="hint">Skill 市场发现会聚合内置 Skill、插件 Skill、插件状态、运行时状态和调用统计。</p>
+          <div class="grid two">
+            <label>sourceType
+              <input id="skillMarketSourceType" placeholder="PLUGIN / BUILTIN" />
+            </label>
+            <label>category
+              <input id="skillMarketCategory" placeholder="demo / text" />
+            </label>
+            <label>tag
+              <input id="skillMarketTag" placeholder="manifest" />
+            </label>
+            <label>enabled
+              <input id="skillMarketEnabled" placeholder="true / false" />
+            </label>
+            <label>runtimeLoaded
+              <input id="skillMarketRuntimeLoaded" placeholder="true / false" />
+            </label>
+            <label>permissionRiskLevel
+              <input id="skillMarketPermissionRiskLevel" placeholder="LOW / MEDIUM / HIGH" />
+            </label>
+            <label>keyword
+              <input id="skillMarketKeyword" placeholder="manifest_demo" />
+            </label>
+          </div>
           <div class="actions">
             <button onclick="getSkills()">获取 Skill 列表</button>
             <button class="secondary" onclick="getSkillMarket()">Skill 市场发现</button>
@@ -614,6 +637,17 @@
       return document.getElementById(id).value.trim();
     }
 
+    function valueOf(id) {
+      const element = document.getElementById(id);
+      return element ? element.value.trim() : "";
+    }
+
+    function appendQuery(query, name, value) {
+      if (value) {
+        query.append(name, value);
+      }
+    }
+
     function requireValue(id, label) {
       const current = value(id);
       if (!current) {
@@ -686,7 +720,16 @@
     }
 
     function getSkillMarket() {
-      return run("GET /api/skills/market", () => requestJson("GET", "/api/skills/market"));
+      const query = new URLSearchParams();
+      appendQuery(query, "sourceType", valueOf("skillMarketSourceType"));
+      appendQuery(query, "category", valueOf("skillMarketCategory"));
+      appendQuery(query, "tag", valueOf("skillMarketTag"));
+      appendQuery(query, "enabled", valueOf("skillMarketEnabled"));
+      appendQuery(query, "runtimeLoaded", valueOf("skillMarketRuntimeLoaded"));
+      appendQuery(query, "permissionRiskLevel", valueOf("skillMarketPermissionRiskLevel"));
+      appendQuery(query, "keyword", valueOf("skillMarketKeyword"));
+      const suffix = query.toString() ? "?" + query.toString() : "";
+      return run("GET /api/skills/market" + suffix, () => requestJson("GET", "/api/skills/market" + suffix));
     }
 
     function getSkillStats() {

@@ -20,6 +20,10 @@ public class SkillMarketResponse {
     private String pluginDisplayName;
     private String pluginAuthor;
     private String pluginHomepage;
+    private String pluginLicense;
+    private String pluginRepository;
+    private String pluginMinPlatformVersion;
+    private String manifestSchemaVersion;
     private String category;
     private List<String> tags;
     private Object examples;
@@ -150,6 +154,38 @@ public class SkillMarketResponse {
 
     public void setPluginHomepage(String pluginHomepage) {
         this.pluginHomepage = pluginHomepage;
+    }
+
+    public String getPluginLicense() {
+        return pluginLicense;
+    }
+
+    public void setPluginLicense(String pluginLicense) {
+        this.pluginLicense = pluginLicense;
+    }
+
+    public String getPluginRepository() {
+        return pluginRepository;
+    }
+
+    public void setPluginRepository(String pluginRepository) {
+        this.pluginRepository = pluginRepository;
+    }
+
+    public String getPluginMinPlatformVersion() {
+        return pluginMinPlatformVersion;
+    }
+
+    public void setPluginMinPlatformVersion(String pluginMinPlatformVersion) {
+        this.pluginMinPlatformVersion = pluginMinPlatformVersion;
+    }
+
+    public String getManifestSchemaVersion() {
+        return manifestSchemaVersion;
+    }
+
+    public void setManifestSchemaVersion(String manifestSchemaVersion) {
+        this.manifestSchemaVersion = manifestSchemaVersion;
     }
 
     public String getCategory() {

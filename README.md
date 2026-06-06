@@ -24,6 +24,7 @@
 - PluginSkillValidator 插件安装校验
 - Skill Manifest：支持插件 Jar 内携带 `META-INF/agent-skill.json`，补充市场分类、标签、示例和权限声明
 - Plugin Permission Declaration：标准化插件权限声明并展示风险等级
+- Skill Manifest Completeness：预览阶段检查 manifest 推荐字段并返回 warnings
 - PluginRuntimeRegistry 插件运行时与 URLClassLoader 生命周期管理
 - MCP Tool Registry、REST MCP 接口、JSON-RPC Adapter
 - External MCP HTTP Client：注册、同步和调用外部 MCP Server 工具
@@ -45,6 +46,7 @@
 | 插件安装校验 | `PluginSkillValidator` 校验 Skill 与 metadata | 已完成     |
 | Skill 市场发现 | `GET /api/skills/market` 聚合内置 Skill、插件 Skill、插件状态、runtime 状态、调用统计和 manifest 市场元数据 | MVP 已完成 |
 | 插件权限声明 | `PluginPermissionPolicy` 标准化 permissions 并返回风险等级，当前仅声明和展示，不做运行时拦截 | MVP 已完成 |
+| Skill Manifest 完整度检查 | `PluginManifestCompletenessChecker` 在 preview 阶段提示缺失的推荐字段 | MVP 已完成 |
 | 插件运行时生命周期 | `PluginRuntimeRegistry` 管理插件运行时，禁用插件时关闭 `URLClassLoader` | MVP 已完成 |
 | MCP 兼容 | `tools/list`、`tools/call`、JSON-RPC Adapter、External MCP Client | MVP 已完成 |
 | 外部 MCP Server | 独立 `mcp-demo-server`，支持注册、同步、调用 | 已完成     |
@@ -335,6 +337,7 @@ Skill 统计：
 - 持久化到 `plugin_package` / `plugin_skill`
 - 可选读取 Jar 内 `META-INF/agent-skill.json`，保存到 `manifest_json` / `market_metadata_json`
 - `/api/skills/market` 用于展示市场发现视图，包括插件来源、状态、runtime、分类、标签、示例、权限声明和调用统计
+- `/api/skills/market` 支持 `sourceType`、`category`、`tag`、`enabled`、`registered`、`runtimeLoaded`、`pluginStatus`、`permissionRiskLevel`、`keyword` 查询过滤
 - `PluginPermissionPolicy` 用于识别标准权限声明，并返回 `permissionDetails` / `permissionRiskLevel`
 - 支持插件包 enable / disable
 - 支持服务启动时自动恢复 `ENABLED` 插件
@@ -772,6 +775,43 @@ my-skill/
 `pom.xml` 可以参考已有插件项目，核心是引用主项目 Skill API，并将其作为 `provided` 或本地系统依赖。
 
 `META-INF/agent-skill.json` 是可选 manifest，用于补充 Skill 市场展示信息，不替代 `Skill.metadata()`。
+
+推荐 manifest 结构：
+
+```json
+{
+  "schemaVersion": "1.0",
+  "plugin": {
+    "name": "my-skill-plugin",
+    "displayName": "My Skill Plugin",
+    "author": "sharon",
+    "version": "1.0.0",
+    "description": "A demo Skill plugin.",
+    "homepage": "https://example.com/my-skill-plugin",
+    "license": "MIT",
+    "repository": "https://example.com/repo",
+    "minPlatformVersion": "0.0.1"
+  },
+  "skills": [
+    {
+      "name": "my_skill",
+      "category": "demo",
+      "tags": ["demo", "local"],
+      "permissions": ["local-compute"],
+      "examples": [
+        {
+          "title": "Run demo",
+          "params": {
+            "text": "hello"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+Preview 阶段会对推荐字段做完整度检查。缺少 `schemaVersion`、`plugin.license`、`plugin.repository`、`plugin.minPlatformVersion` 等字段时只返回 warnings，不阻断安装。
 
 当前推荐权限声明：
 

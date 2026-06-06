@@ -11,6 +11,9 @@ public class PluginManifestInfo {
     private String version;
     private String description;
     private String homepage;
+    private String license;
+    private String repository;
+    private String minPlatformVersion;
 
     public String getName() {
         return name;
@@ -58,5 +61,29 @@ public class PluginManifestInfo {
 
     public void setHomepage(String homepage) {
         this.homepage = homepage;
+    }
+
+    public String getLicense() {
+        return license;
+    }
+
+    public void setLicense(String license) {
+        this.license = license;
+    }
+
+    public String getRepository() {
+        return repository;
+    }
+
+    public void setRepository(String repository) {
+        this.repository = repository;
+    }
+
+    public String getMinPlatformVersion() {
+        return minPlatformVersion;
+    }
+
+    public void setMinPlatformVersion(String minPlatformVersion) {
+        this.minPlatformVersion = minPlatformVersion;
     }
 }

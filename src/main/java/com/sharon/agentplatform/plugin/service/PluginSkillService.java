@@ -13,6 +13,7 @@ import com.sharon.agentplatform.plugin.dto.PluginSkillResponse;
 import com.sharon.agentplatform.plugin.entity.PluginPackageEntity;
 import com.sharon.agentplatform.plugin.entity.PluginSkillEntity;
 import com.sharon.agentplatform.plugin.manifest.PluginManifest;
+import com.sharon.agentplatform.plugin.manifest.PluginManifestCompletenessChecker;
 import com.sharon.agentplatform.plugin.manifest.PluginManifestLoader;
 import com.sharon.agentplatform.plugin.manifest.PluginManifestSkill;
 import com.sharon.agentplatform.plugin.permission.PluginPermissionPolicy;
@@ -54,6 +55,7 @@ public class PluginSkillService {
     private final PluginSkillValidator pluginSkillValidator;
     private final PluginRuntimeRegistry pluginRuntimeRegistry;
     private final PluginManifestLoader pluginManifestLoader;
+    private final PluginManifestCompletenessChecker pluginManifestCompletenessChecker;
     private final PluginPermissionPolicy pluginPermissionPolicy;
     private final ObjectMapper objectMapper;
     private final Path pluginDir = Path.of("data", "plugins").toAbsolutePath().normalize();
@@ -65,6 +67,7 @@ public class PluginSkillService {
                               PluginSkillValidator pluginSkillValidator,
                               PluginRuntimeRegistry pluginRuntimeRegistry,
                               PluginManifestLoader pluginManifestLoader,
+                              PluginManifestCompletenessChecker pluginManifestCompletenessChecker,
                               PluginPermissionPolicy pluginPermissionPolicy,
                               ObjectMapper objectMapper) {
         this.pluginSkillLoader = pluginSkillLoader;
@@ -74,6 +77,7 @@ public class PluginSkillService {
         this.pluginSkillValidator = pluginSkillValidator;
         this.pluginRuntimeRegistry = pluginRuntimeRegistry;
         this.pluginManifestLoader = pluginManifestLoader;
+        this.pluginManifestCompletenessChecker = pluginManifestCompletenessChecker;
         this.pluginPermissionPolicy = pluginPermissionPolicy;
         this.objectMapper = objectMapper;
     }
@@ -96,6 +100,7 @@ public class PluginSkillService {
 
             PluginManifest manifest = pluginManifestLoader.load(tempJar).orElse(null);
             response.setManifest(manifest);
+            response.getWarnings().addAll(pluginManifestCompletenessChecker.check(manifest));
             loadResult = pluginSkillLoader.loadWithClassLoader(tempJar);
             List<Skill> skills = loadResult.getLoadedSkills();
 

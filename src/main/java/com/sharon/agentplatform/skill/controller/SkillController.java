@@ -8,6 +8,7 @@ import com.sharon.agentplatform.skill.core.SkillRegistry;
 import com.sharon.agentplatform.skill.core.SkillResult;
 import com.sharon.agentplatform.skill.dto.SkillCallRequest;
 import com.sharon.agentplatform.skill.dto.SkillEnableResponse;
+import com.sharon.agentplatform.skill.dto.SkillMarketQuery;
 import com.sharon.agentplatform.skill.dto.SkillMarketResponse;
 import com.sharon.agentplatform.skill.dto.SkillStatsResponse;
 import com.sharon.agentplatform.skill.service.SkillMarketService;
@@ -54,8 +55,8 @@ public class SkillController {
     }
 
     @GetMapping("/market")
-    public ApiResponse<List<SkillMarketResponse>> getSkillMarket() {
-        return ApiResponse.success(skillMarketService.listMarketSkills());
+    public ApiResponse<List<SkillMarketResponse>> getSkillMarket(SkillMarketQuery query) {
+        return ApiResponse.success(skillMarketService.listMarketSkills(query));
     }
 
     @GetMapping("/{name}")

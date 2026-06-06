@@ -21,6 +21,9 @@ import com.sharon.agentplatform.plugin.repository.PluginPackageRepository;
 import com.sharon.agentplatform.plugin.repository.PluginSkillRepository;
 import com.sharon.agentplatform.plugin.runtime.PluginRuntime;
 import com.sharon.agentplatform.plugin.runtime.PluginRuntimeRegistry;
+import com.sharon.agentplatform.plugin.spi.PluginContext;
+import com.sharon.agentplatform.plugin.spi.PluginContextAware;
+import com.sharon.agentplatform.plugin.spi.PluginContextFactory;
 import com.sharon.agentplatform.skill.core.Skill;
 import com.sharon.agentplatform.skill.core.SkillMetadata;
 import com.sharon.agentplatform.skill.core.SkillRegistry;
@@ -57,6 +60,7 @@ public class PluginSkillService {
     private final PluginManifestLoader pluginManifestLoader;
     private final PluginManifestCompletenessChecker pluginManifestCompletenessChecker;
     private final PluginPermissionPolicy pluginPermissionPolicy;
+    private final PluginContextFactory pluginContextFactory;
     private final ObjectMapper objectMapper;
     private final Path pluginDir = Path.of("data", "plugins").toAbsolutePath().normalize();
 
@@ -69,6 +73,7 @@ public class PluginSkillService {
                               PluginManifestLoader pluginManifestLoader,
                               PluginManifestCompletenessChecker pluginManifestCompletenessChecker,
                               PluginPermissionPolicy pluginPermissionPolicy,
+                              PluginContextFactory pluginContextFactory,
                               ObjectMapper objectMapper) {
         this.pluginSkillLoader = pluginSkillLoader;
         this.skillRegistry = skillRegistry;
@@ -79,6 +84,7 @@ public class PluginSkillService {
         this.pluginManifestLoader = pluginManifestLoader;
         this.pluginManifestCompletenessChecker = pluginManifestCompletenessChecker;
         this.pluginPermissionPolicy = pluginPermissionPolicy;
+        this.pluginContextFactory = pluginContextFactory;
         this.objectMapper = objectMapper;
     }
 
@@ -103,6 +109,7 @@ public class PluginSkillService {
             response.getWarnings().addAll(pluginManifestCompletenessChecker.check(manifest));
             loadResult = pluginSkillLoader.loadWithClassLoader(tempJar);
             List<Skill> skills = loadResult.getLoadedSkills();
+            injectPluginContext("preview", tempJar, skills);
 
             for (Skill skill : skills) {
                 SkillMetadata metadata = skill.metadata();
@@ -172,6 +179,7 @@ public class PluginSkillService {
             pluginPackage.setManifestJson(toNullableJson(manifest));
             loadResult = pluginSkillLoader.loadWithClassLoader(jarPath);
             List<Skill> skills = loadResult.getLoadedSkills();
+            injectPluginContext(pluginId, jarPath, skills);
             pluginSkillValidator.validateForUpload(skills, manifest);
             List<LoadedPluginSkill> loadedPluginSkills = registerAndPersistSkills(pluginId, jarPath, skills, manifest, true);
             registeredSkillNames = loadedPluginSkills.stream()
@@ -272,6 +280,7 @@ public class PluginSkillService {
             loadResult = pluginSkillLoader.loadWithClassLoader(jarPath);
             PluginManifest manifest = pluginManifestLoader.load(jarPath).orElse(null);
             List<Skill> skills = loadResult.getLoadedSkills();
+            injectPluginContext(pluginPackage.getPluginId(), jarPath, skills);
             pluginSkillValidator.validateForBootstrap(skills, manifest);
             List<LoadedPluginSkill> loadedPluginSkills = registerAndPersistSkills(pluginPackage.getPluginId(), jarPath, skills, manifest, true);
             registeredSkillNames = loadedPluginSkills.stream()
@@ -335,6 +344,24 @@ public class PluginSkillService {
         runtime.setSkillNames(skillNames);
         runtime.setLoadedAt(loadedAt);
         pluginRuntimeRegistry.register(runtime);
+    }
+
+    private void injectPluginContext(String pluginId, Path jarPath, List<Skill> skills) {
+        if (skills == null || skills.isEmpty()) {
+            return;
+        }
+
+        PluginContext pluginContext = pluginContextFactory.create(pluginId, jarPath);
+        for (Skill skill : skills) {
+            if (skill instanceof PluginContextAware contextAware) {
+                try {
+                    contextAware.setPluginContext(pluginContext);
+                    log.info("Injected plugin context into skill class: {}", skill.getClass().getName());
+                } catch (RuntimeException exception) {
+                    throw new BusinessException("Failed to inject plugin context: " + skill.getClass().getName(), exception);
+                }
+            }
+        }
     }
 
     private void closeLoadResult(PluginLoadResult loadResult) {

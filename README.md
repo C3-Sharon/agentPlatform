@@ -26,6 +26,7 @@
 - Plugin Permission Declaration：标准化插件权限声明并展示风险等级
 - Skill Manifest Completeness：预览阶段检查 manifest 推荐字段并返回 warnings
 - PluginRuntimeRegistry 插件运行时与 URLClassLoader 生命周期管理
+- PluginContext / SPI：向插件 Skill 注入受控上下文，提供 pluginId、platformVersion、jarPath 和插件日志
 - MCP Tool Registry、REST MCP 接口、JSON-RPC Adapter
 - External MCP HTTP Client：注册、同步和调用外部 MCP Server 工具
 - Web 控制台与 PowerShell CLI 控制台
@@ -48,6 +49,7 @@
 | 插件权限声明 | `PluginPermissionPolicy` 标准化 permissions 并返回风险等级，当前仅声明和展示，不做运行时拦截 | MVP 已完成 |
 | Skill Manifest 完整度检查 | `PluginManifestCompletenessChecker` 在 preview 阶段提示缺失的推荐字段 | MVP 已完成 |
 | 插件运行时生命周期 | `PluginRuntimeRegistry` 管理插件运行时，禁用插件时关闭 `URLClassLoader` | MVP 已完成 |
+| 插件受控上下文 | `PluginContext` / `PluginContextAware` 为插件提供受控 SPI，不开放 Spring Bean 注入 | MVP 已完成 |
 | MCP 兼容 | `tools/list`、`tools/call`、JSON-RPC Adapter、External MCP Client | MVP 已完成 |
 | 外部 MCP Server | 独立 `mcp-demo-server`，支持注册、同步、调用 | 已完成     |
 | 3 个不同方向 Skill 演示 | `calculator`、`weather`、`file_search`、`resume_optimize`、`text_reverse`、`text_insight`、`mcp_echo_client` 等 | 已完成     |
@@ -344,6 +346,9 @@ Skill 统计：
 - 每个插件包运行时维护独立 `PluginRuntime`
 - `PluginRuntimeRegistry` 管理当前 JVM 中已加载的插件 runtime
 - 禁用插件时注销对应 Skill、关闭 `URLClassLoader`、移除 runtime 引用
+- 插件可选实现 `PluginContextAware`，平台加载时注入 `PluginContext`
+- 当前 `PluginContext` 暴露 `pluginId`、`jarPath`、`platformVersion` 和 `PluginLogger`
+- `PluginContext` 是受控 SPI，不等同于开放 Spring Bean 注入
 
 插件主要接口：
 
@@ -895,7 +900,14 @@ public class MySkill implements Skill {
 - 未做权限沙箱
 - 未做插件依赖冲突治理
 
-未来可通过 `PluginContext` / SPI 暴露受控平台能力，例如：
+当前已提供 `PluginContext` / SPI 基础能力：
+
+- `pluginId`
+- `jarPath`
+- `platformVersion`
+- `PluginLogger`
+
+后续可继续通过 `PluginContext` / SPI 暴露受控平台能力，例如：
 
 - `ModelClient`
 - `McpToolClient`

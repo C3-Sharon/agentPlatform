@@ -46,7 +46,7 @@
 | Skill 启用/禁用 | 插件包维度 + 单 Skill 维度逻辑启用/禁用 | 已完成     |
 | 插件安装校验 | `PluginSkillValidator` 校验 Skill 与 metadata | 已完成     |
 | Skill 市场发现 | `GET /api/skills/market` 聚合内置 Skill、插件 Skill、插件状态、runtime 状态、调用统计和 manifest 市场元数据 | MVP 已完成 |
-| 插件权限声明 | `PluginPermissionPolicy` 标准化 permissions 并返回风险等级，当前仅声明和展示，不做运行时拦截 | MVP 已完成 |
+| 插件权限声明 | `PluginPermissionPolicy` 标准化 permissions 并返回风险等级，`PluginContext` 支持运行时权限检查 | MVP 已完成 |
 | Skill Manifest 完整度检查 | `PluginManifestCompletenessChecker` 在 preview 阶段提示缺失的推荐字段 | MVP 已完成 |
 | 插件运行时生命周期 | `PluginRuntimeRegistry` 管理插件运行时，禁用插件时关闭 `URLClassLoader` | MVP 已完成 |
 | 插件受控上下文 | `PluginContext` / `PluginContextAware` 为插件提供受控 SPI，不开放 Spring Bean 注入 | MVP 已完成 |
@@ -347,7 +347,8 @@ Skill 统计：
 - `PluginRuntimeRegistry` 管理当前 JVM 中已加载的插件 runtime
 - 禁用插件时注销对应 Skill、关闭 `URLClassLoader`、移除 runtime 引用
 - 插件可选实现 `PluginContextAware`，平台加载时注入 `PluginContext`
-- 当前 `PluginContext` 暴露 `pluginId`、`jarPath`、`platformVersion` 和 `PluginLogger`
+- 当前 `PluginContext` 暴露 `pluginId`、`jarPath`、`platformVersion`、`PluginLogger` 和 permissions
+- `PluginContext` 支持 `hasPermission` / `requirePermission`，用于插件内部进行受控权限检查
 - `PluginContext` 是受控 SPI，不等同于开放 Spring Bean 注入
 
 插件主要接口：
@@ -834,7 +835,7 @@ memory:read
 memory:write
 ```
 
-这些 permissions 当前用于 preview 和 market 展示，平台会返回权限说明与风险等级，但暂不做运行时安全拦截。
+这些 permissions 会用于 preview 和 market 展示，平台会返回权限说明与风险等级。对于实现 `PluginContextAware` 的插件，平台会把当前 Skill 的 permissions 注入 `PluginContext`，插件可通过 `hasPermission` / `requirePermission` 做运行时权限检查。
 
 ### 9.3 Skill 代码示意
 
@@ -906,6 +907,8 @@ public class MySkill implements Skill {
 - `jarPath`
 - `platformVersion`
 - `PluginLogger`
+- `permissions`
+- `hasPermission` / `requirePermission`
 
 后续可继续通过 `PluginContext` / SPI 暴露受控平台能力，例如：
 
@@ -1260,7 +1263,7 @@ CLI 脚本在部分 Windows 控制台里可能出现中文编码问题。建议�
 - 插件 Skill 不支持 Spring Bean 注入
 - 插件禁用会关闭 `URLClassLoader` 并移除平台引用，但不保证 JVM 立即卸载插件类
 - 插件不做依赖冲突治理和安全沙箱
-- Skill Manifest 中的 permissions 当前是声明和展示信息，尚未做运行时权限拦截
+- Skill Manifest 中的 permissions 已可注入 `PluginContext` 做运行时权限检查，但还不是完整权限沙箱
 - Skill 市场没有完整权限系统
 - Vision Chat 不支持音频/视频
 - Web Console 是静态控制台，不是完整前端系统

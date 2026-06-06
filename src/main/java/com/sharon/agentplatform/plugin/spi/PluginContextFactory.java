@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
+import java.util.List;
 
 @Component
 public class PluginContextFactory {
@@ -19,11 +20,16 @@ public class PluginContextFactory {
     }
 
     public PluginContext create(String pluginId, Path jarPath) {
+        return create(pluginId, jarPath, List.of());
+    }
+
+    public PluginContext create(String pluginId, Path jarPath, List<String> permissions) {
         DefaultPluginContext context = new DefaultPluginContext();
         context.setPluginId(pluginId);
         context.setJarPath(jarPath == null ? null : jarPath.toString());
         context.setPlatformVersion(platformVersion);
         context.setLogger(new Slf4jPluginLogger(pluginId));
+        context.setPermissions(permissions);
         return context;
     }
 

@@ -1,5 +1,7 @@
 package com.sharon.agentplatform.plugin.spi;
 
+import java.util.List;
+
 public interface PluginContext {
 
     String getPluginId();
@@ -9,4 +11,10 @@ public interface PluginContext {
     String getPlatformVersion();
 
     PluginLogger getLogger();
+
+    List<String> getPermissions();
+
+    boolean hasPermission(String permission);
+
+    void requirePermission(String permission);
 }

@@ -2,6 +2,7 @@ package com.sharon.agentplatform.mcp.external.controller;
 
 import com.sharon.agentplatform.common.ApiResponse;
 import com.sharon.agentplatform.mcp.external.dto.McpExternalServerCreateRequest;
+import com.sharon.agentplatform.mcp.external.dto.McpExternalServerHealthResponse;
 import com.sharon.agentplatform.mcp.external.dto.McpExternalServerResponse;
 import com.sharon.agentplatform.mcp.external.dto.McpExternalToolCallRequest;
 import com.sharon.agentplatform.mcp.external.dto.McpExternalToolCallResponse;
@@ -43,6 +44,11 @@ public class McpExternalServerController {
     @PostMapping("/servers/{serverId}/sync-tools")
     public ApiResponse<McpExternalServerResponse> syncTools(@PathVariable String serverId) {
         return ApiResponse.success(mcpExternalServerService.syncTools(serverId));
+    }
+
+    @PostMapping("/servers/{serverId}/health-check")
+    public ApiResponse<McpExternalServerHealthResponse> healthCheck(@PathVariable String serverId) {
+        return ApiResponse.success(mcpExternalServerService.healthCheck(serverId));
     }
 
     @PostMapping("/tools/{toolId}/call")

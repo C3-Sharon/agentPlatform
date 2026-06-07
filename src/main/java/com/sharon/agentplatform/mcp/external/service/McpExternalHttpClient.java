@@ -12,6 +12,22 @@ public class McpExternalHttpClient {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
+    public Map<String, Object> initialize(String baseUrl) {
+        return post(baseUrl, Map.of(
+                "jsonrpc", "2.0",
+                "id", 1,
+                "method", "initialize"
+        ));
+    }
+
+    public Map<String, Object> ping(String baseUrl) {
+        return post(baseUrl, Map.of(
+                "jsonrpc", "2.0",
+                "id", 1,
+                "method", "ping"
+        ));
+    }
+
     public Map<String, Object> listTools(String baseUrl) {
         return post(baseUrl, Map.of(
                 "jsonrpc", "2.0",

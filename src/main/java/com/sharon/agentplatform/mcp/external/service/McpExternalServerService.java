@@ -3,6 +3,7 @@ package com.sharon.agentplatform.mcp.external.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sharon.agentplatform.common.exception.BusinessException;
 import com.sharon.agentplatform.mcp.external.dto.McpExternalServerCreateRequest;
+import com.sharon.agentplatform.mcp.external.dto.McpExternalServerHealthResponse;
 import com.sharon.agentplatform.mcp.external.dto.McpExternalServerResponse;
 import com.sharon.agentplatform.mcp.external.dto.McpExternalToolCallRequest;
 import com.sharon.agentplatform.mcp.external.dto.McpExternalToolCallResponse;
@@ -14,6 +15,7 @@ import com.sharon.agentplatform.mcp.external.repository.McpExternalToolRepositor
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -73,6 +75,28 @@ public class McpExternalServerService {
         return toServerResponse(findServer(serverId));
     }
 
+    public McpExternalServerHealthResponse healthCheck(String serverId) {
+        McpExternalServerEntity server = findServer(serverId);
+        McpExternalServerHealthResponse response = new McpExternalServerHealthResponse();
+        response.setServerId(server.getServerId());
+        response.setName(server.getName());
+        response.setBaseUrl(server.getBaseUrl());
+        response.setEnabled(server.getEnabled());
+        response.setCheckedAt(LocalDateTime.now());
+
+        tryInitialize(server, response);
+        tryPing(server, response);
+        tryListTools(server, response);
+
+        boolean healthy = Boolean.TRUE.equals(response.getToolsListOk());
+        response.setHealthy(healthy);
+        response.setStatus(healthy ? "UP" : "DOWN");
+        if (!healthy) {
+            response.setErrorMessage(response.getToolsListError());
+        }
+        return response;
+    }
+
     public McpExternalServerResponse syncTools(String serverId) {
         McpExternalServerEntity server = findServer(serverId);
         try {
@@ -127,6 +151,56 @@ public class McpExternalServerService {
                 .orElseThrow(() -> new BusinessException("External MCP server not found: " + serverId));
     }
 
+    private void tryInitialize(McpExternalServerEntity server, McpExternalServerHealthResponse health) {
+        try {
+            Map<String, Object> response = httpClient.initialize(server.getBaseUrl());
+            Map<String, Object> result = readResultMap(response);
+            health.setInitializeOk(true);
+            health.setRawInitializeResult(result);
+            health.setProtocolVersion(stringValue(result.get("protocolVersion")));
+            health.setServerInfo(result.get("serverInfo"));
+            health.setCapabilities(result.get("capabilities"));
+        } catch (RuntimeException exception) {
+            health.setInitializeOk(false);
+            health.setInitializeError(exception.getMessage());
+        }
+    }
+
+    private void tryPing(McpExternalServerEntity server, McpExternalServerHealthResponse health) {
+        try {
+            Map<String, Object> response = httpClient.ping(server.getBaseUrl());
+            health.setPingOk(true);
+            health.setRawPingResult(readResultMap(response));
+        } catch (RuntimeException exception) {
+            health.setPingOk(false);
+            health.setPingError(exception.getMessage());
+        }
+    }
+
+    private void tryListTools(McpExternalServerEntity server, McpExternalServerHealthResponse health) {
+        try {
+            Map<String, Object> response = httpClient.listTools(server.getBaseUrl());
+            List<?> tools = readTools(response);
+            List<String> toolNames = new ArrayList<>();
+            for (Object item : tools) {
+                if (item instanceof Map<?, ?> toolMap) {
+                    String name = stringValue(toolMap.get("name"));
+                    if (name != null && !name.isBlank()) {
+                        toolNames.add(name);
+                    }
+                }
+            }
+            health.setToolsListOk(true);
+            health.setToolCount(tools.size());
+            health.setToolNames(toolNames);
+        } catch (RuntimeException exception) {
+            health.setToolsListOk(false);
+            health.setToolsListError(exception.getMessage());
+            health.setToolCount(0);
+            health.setToolNames(List.of());
+        }
+    }
+
     private void upsertTool(McpExternalServerEntity server, Map<?, ?> toolMap, LocalDateTime now) {
         String remoteName = stringValue(toolMap.get("name"));
         if (remoteName == null || remoteName.isBlank()) {
@@ -160,6 +234,15 @@ public class McpExternalServerService {
             }
         }
         throw new BusinessException("External MCP tools/list response missing result.tools");
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> readResultMap(Map<String, Object> response) {
+        Object result = response.get("result");
+        if (result instanceof Map<?, ?> resultMap) {
+            return (Map<String, Object>) resultMap;
+        }
+        return Map.of();
     }
 
     private McpExternalServerResponse toServerResponse(McpExternalServerEntity entity) {

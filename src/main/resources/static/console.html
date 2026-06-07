@@ -474,6 +474,7 @@
           <div class="actions">
             <button onclick="syncExternalTools()">同步外部工具</button>
             <button class="secondary" onclick="getExternalServer()">查看外部 MCP Server</button>
+            <button class="secondary" onclick="healthCheckExternalServer()">健康检查</button>
           </div>
         </div>
 
@@ -893,6 +894,11 @@
     function getExternalServer() {
       const serverId = encodeURIComponent(requireValue("externalServerId", "serverId"));
       return run("GET /api/mcp/external/servers/" + serverId, () => requestJson("GET", "/api/mcp/external/servers/" + serverId));
+    }
+
+    function healthCheckExternalServer() {
+      const serverId = encodeURIComponent(requireValue("externalServerId", "serverId"));
+      return run("POST /api/mcp/external/servers/" + serverId + "/health-check", () => requestJson("POST", "/api/mcp/external/servers/" + serverId + "/health-check"));
     }
 
     function callExternalTool() {

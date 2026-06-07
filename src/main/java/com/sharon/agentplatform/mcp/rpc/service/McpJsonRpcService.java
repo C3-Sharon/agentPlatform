@@ -49,6 +49,7 @@ public class McpJsonRpcService {
             case "tools/list" -> toolsRpcHandler.listTools(request.getId());
             case "tools/call" -> toolsRpcHandler.callTool(request.getId(), request.getParams());
             case "resources/list" -> resourcesRpcHandler.listResources(request.getId());
+            case "resources/templates/list" -> resourcesRpcHandler.listResourceTemplates(request.getId());
             case "resources/read" -> resourcesRpcHandler.readResource(request);
             case "prompts/list" -> promptsRpcHandler.listPrompts(request.getId());
             case "prompts/get" -> promptsRpcHandler.getPrompt(request.getId(), request.getParams());

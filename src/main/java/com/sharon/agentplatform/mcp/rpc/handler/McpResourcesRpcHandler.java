@@ -60,6 +60,31 @@ public class McpResourcesRpcHandler {
         ));
     }
 
+    public McpJsonRpcResponse listResourceTemplates(Object id) {
+        return McpJsonRpcResponse.success(id, Map.of(
+                "resourceTemplates", List.of(
+                        resourceTemplateDescriptor(
+                                RESOURCE_RECENT_RUNS + "?limit={limit}",
+                                "Recent Agent Runs",
+                                "Read recent Agent Run History summaries. The limit defaults to 10 and is capped at 50.",
+                                "application/json"
+                        ),
+                        resourceTemplateDescriptor(
+                                RESOURCE_LONG_TERM_MEMORY + "?conversationId={conversationId}",
+                                "Long-Term Memory By Conversation",
+                                "Read FileLongTermMemoryStore entries for a conversationId.",
+                                "application/json"
+                        ),
+                        resourceTemplateDescriptor(
+                                RESOURCE_CONVERSATION_RESOURCES + "?conversationId={conversationId}",
+                                "Conversation Resources",
+                                "Read resources attached to a conversationId.",
+                                "application/json"
+                        )
+                )
+        ));
+    }
+
     public McpJsonRpcResponse readResource(McpJsonRpcRequest request) {
         Map<String, Object> params = request.getParams();
         Object uriValue = params == null ? null : params.get("uri");
@@ -107,6 +132,15 @@ public class McpResourcesRpcHandler {
         resource.put("description", description);
         resource.put("mimeType", mimeType);
         return resource;
+    }
+
+    private Map<String, Object> resourceTemplateDescriptor(String uriTemplate, String name, String description, String mimeType) {
+        Map<String, Object> resourceTemplate = new LinkedHashMap<>();
+        resourceTemplate.put("uriTemplate", uriTemplate);
+        resourceTemplate.put("name", name);
+        resourceTemplate.put("description", description);
+        resourceTemplate.put("mimeType", mimeType);
+        return resourceTemplate;
     }
 
     private McpJsonRpcResponse resourceReadSuccess(Object id, String uri, Object data) {

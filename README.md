@@ -297,6 +297,13 @@ Vision Chat MVP：
 - Explanation View：基于已有视图生成稳定中文摘要、亮点和风险提示，不额外调用 LLM
 - Reflection View：基于已有视图生成规则式复盘，输出做得好的地方、需要注意的问题和下一步建议
 
+Trace data 稳定化：
+
+- 关键 trace data 已补充 `decisionType`、`decisionSource`、`selectedSkill`、`resolvedParams`、`missingParams`、`pendingStore`、`nextState`
+- Skill 调用 trace 已补充 `actionType`、`observationType`、`observationSummary`
+- 回答生成 trace 已补充 `answerType`
+- 新字段用于提升 Plan / Timeline / Debug 视图稳定性，同时继续兼容历史 trace 中的 `skillName`、`params`、`knownParams`、`result`
+
 区别：
 
 - Memory：给 Agent 下一轮推理使用
@@ -1318,6 +1325,7 @@ CLI 脚本在部分 Windows 控制台里可能出现中文编码问题。建议�
 - Web Console 是静态控制台，不是完整前端系统
 - Agent Team 尚未实现
 - Agent Workflow / Plan / Decision / Action / Timeline / Debug / Explanation / Reflection 当前是基于 Run History 与 Trace 的只读可观测视图，还不是新的 Agent 执行引擎
+- Trace data 已补充稳定字段，但 `AgentAction` / `AgentObservation` / `AgentReflection` 仍未作为独立数据库表持久化
 - Redis 已作为可选 `PendingSkillCallStore` 接入，只用于追问临时状态，不迁移 Memory、Run History 或异步任务
 - 向量库 / RAG 尚未实现
 - `resume_optimize` 仍是内置复杂 Skill，未拆成外部 Jar
@@ -1331,7 +1339,7 @@ CLI 脚本在部分 Windows 控制台里可能出现中文编码问题。建议�
 - 向量库长期记忆与 RAG
 - 完整 MCP stdio / SSE / Streamable HTTP transport
 - 更完整的 MCP initialize / capabilities / resources / prompts 对齐
-- AgentRuntime Workflow 标准化：已具备只读 Workflow / Plan / Decision / Action / Timeline / Explanation / Reflection 视图，后续继续演进一等结构化 Action / Observation / Reflection 持久化模型
+- AgentRuntime Workflow 标准化：已具备只读 Workflow / Plan / Decision / Action / Timeline / Debug / Explanation / Reflection 视图，并补充稳定 trace data 字段，后续继续演进一等结构化 Action / Observation / Reflection 持久化模型
 - PluginContext / SPI：向插件暴露受控的 ModelClient、McpToolClient、ResourceClient、ConfigClient
 - 插件版本升级、回滚与物理卸载
 - 插件依赖隔离与冲突治理

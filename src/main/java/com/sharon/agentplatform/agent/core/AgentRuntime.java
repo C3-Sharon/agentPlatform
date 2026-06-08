@@ -146,10 +146,15 @@ public class AgentRuntime {
                 trace.add(AgentTrace.success(
                         AgentStep.INTENT_DETECTION,
                         "识别为显式 Skill 调用",
-                        Map.of(
+                        traceData(
                                 "intent", "explicit_skill_call",
+                                "decisionType", "INTENT",
+                                "decisionSource", "EXPLICIT_SKILL_CALL",
+                                "selectedSkill", explicitSkillCall.skillName(),
                                 "skillName", explicitSkillCall.skillName(),
-                                "params", explicitSkillCall.params()
+                                "resolvedParams", explicitSkillCall.params(),
+                                "params", explicitSkillCall.params(),
+                                "nextState", "RESOLVE_PARAMS"
                         )
                 ));
 
@@ -198,11 +203,16 @@ public class AgentRuntime {
                             AgentStep.LLM_SKILL_DECISION,
                             AgentTraceStatus.SUCCESS,
                             "LLM 完成 Skill 调用决策",
-                            Map.of(
+                            traceData(
+                                    "decisionType", "LLM_SKILL_DECISION",
+                                    "decisionSource", "LLM",
                                     "needSkill", decision.isNeedSkill(),
+                                    "selectedSkill", decision.getSkillName() == null ? "" : decision.getSkillName(),
                                     "skillName", decision.getSkillName() == null ? "" : decision.getSkillName(),
+                                    "resolvedParams", decision.getParams(),
                                     "params", decision.getParams(),
-                                    "reason", decision.getReason() == null ? "" : decision.getReason()
+                                    "reason", decision.getReason() == null ? "" : decision.getReason(),
+                                    "nextState", decision.isNeedSkill() ? "SELECT_SKILL" : "RULE_FALLBACK"
                             ),
                             decisionDurationMs
                     ));
@@ -349,6 +359,19 @@ public class AgentRuntime {
                 finishedAt,
                 durationMs
         );
+    }
+
+    private Map<String, Object> traceData(Object... keyValues) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        for (int i = 0; i + 1 < keyValues.length; i += 2) {
+            Object key = keyValues[i];
+            if (key == null) {
+                continue;
+            }
+            Object value = keyValues[i + 1];
+            data.put(key.toString(), value == null ? "" : value);
+        }
+        return data;
     }
 
     private String normalizeConversationId(String conversationId) {
@@ -633,11 +656,16 @@ public class AgentRuntime {
         trace.add(AgentTrace.success(
                 AgentStep.INTENT_DETECTION,
                 "继续未完成的 Skill 调用",
-                Map.of(
+                traceData(
+                        "decisionType", "PENDING_RESUME",
+                        "decisionSource", "PENDING_SKILL_CALL",
+                        "selectedSkill", pending.getSkillName(),
                         "skillName", pending.getSkillName(),
+                        "resolvedParams", knownParams,
                         "knownParams", knownParams,
                         "missingParams", missingParams,
-                        "pendingStore", pendingSkillCallStore.storeType()
+                        "pendingStore", pendingSkillCallStore.storeType(),
+                        "nextState", missingParams.isEmpty() ? "SELECT_SKILL" : "ASK_USER"
                 )
         ));
 
@@ -647,8 +675,12 @@ public class AgentRuntime {
             trace.add(AgentTrace.success(
                     AgentStep.SELECT_SKILL,
                     "补齐参数后选择 pending Skill",
-                    Map.of(
+                    traceData(
+                            "decisionType", "SKILL_SELECTION",
+                            "decisionSource", "PENDING_SKILL_CALL",
+                            "selectedSkill", pending.getSkillName(),
                             "skillName", pending.getSkillName(),
+                            "resolvedParams", knownParams,
                             "params", knownParams
                     )
             ));
@@ -679,11 +711,16 @@ public class AgentRuntime {
         trace.add(AgentTrace.success(
                 AgentStep.INTENT_DETECTION,
                 "继续未完成的 Skill 调用但参数仍不足",
-                Map.of(
+                traceData(
+                        "decisionType", "PENDING_RESUME",
+                        "decisionSource", "PENDING_SKILL_CALL",
+                        "selectedSkill", pending.getSkillName(),
                         "skillName", pending.getSkillName(),
+                        "resolvedParams", knownParams,
                         "knownParams", knownParams,
                         "missingParams", missingParams,
-                        "pendingStore", pendingSkillCallStore.storeType()
+                        "pendingStore", pendingSkillCallStore.storeType(),
+                        "nextState", "ASK_USER"
                 )
         ));
 
@@ -725,11 +762,16 @@ public class AgentRuntime {
         trace.add(AgentTrace.success(
                 AgentStep.INTENT_DETECTION,
                 "Skill 参数不足，进入追问",
-                Map.of(
+                traceData(
+                        "decisionType", "PARAM_RESOLUTION",
+                        "decisionSource", "REQUIRED_SCHEMA",
+                        "selectedSkill", skillName,
                         "skillName", skillName,
+                        "resolvedParams", pending.getKnownParams(),
                         "knownParams", pending.getKnownParams(),
                         "missingParams", missingParams,
-                        "pendingStore", pendingSkillCallStore.storeType()
+                        "pendingStore", pendingSkillCallStore.storeType(),
+                        "nextState", "ASK_USER"
                 )
         ));
 
@@ -766,7 +808,13 @@ public class AgentRuntime {
             trace.add(AgentTrace.success(
                     AgentStep.INTENT_DETECTION,
                     "规则兜底：识别为简历优化意图",
-                    Map.of("intent", RESUME_OPTIMIZE_SKILL)
+                    traceData(
+                            "intent", RESUME_OPTIMIZE_SKILL,
+                            "decisionType", "INTENT",
+                            "decisionSource", "RULE",
+                            "selectedSkill", RESUME_OPTIMIZE_SKILL,
+                            "nextState", "SELECT_SKILL"
+                    )
             ));
 
             return handleResumeOptimize(
@@ -791,11 +839,17 @@ public class AgentRuntime {
         trace.add(AgentTrace.success(
                 AgentStep.INTENT_DETECTION,
                 "识别为简历优化意图，但参数不足，进入追问",
-                Map.of(
+                traceData(
+                        "intent", RESUME_OPTIMIZE_SKILL,
+                        "decisionType", "PARAM_RESOLUTION",
+                        "decisionSource", "RULE",
+                        "selectedSkill", RESUME_OPTIMIZE_SKILL,
                         "skillName", RESUME_OPTIMIZE_SKILL,
+                        "resolvedParams", knownParams,
                         "knownParams", knownParams,
                         "missingParams", missingParams,
-                        "pendingStore", pendingSkillCallStore.storeType()
+                        "pendingStore", pendingSkillCallStore.storeType(),
+                        "nextState", "ASK_USER"
                 )
         ));
 
@@ -911,8 +965,12 @@ public class AgentRuntime {
         trace.add(AgentTrace.success(
                 AgentStep.SELECT_SKILL,
                 "规则兜底选择显式指定的 Skill",
-                Map.of(
+                traceData(
+                        "decisionType", "SKILL_SELECTION",
+                        "decisionSource", "EXPLICIT_SKILL_CALL",
+                        "selectedSkill", skillName,
                         "skillName", skillName,
+                        "resolvedParams", params,
                         "params", params
                 )
         ));
@@ -957,10 +1015,15 @@ public class AgentRuntime {
             trace.add(AgentTrace.success(
                     AgentStep.INTENT_DETECTION,
                     "\u4ece\u81ea\u7136\u8bed\u8a00\u8865\u5168\u5355\u5b57\u7b26\u4e32\u53c2\u6570",
-                    Map.of(
+                    traceData(
+                            "decisionType", "PARAM_RESOLUTION",
+                            "decisionSource", "RULE",
+                            "selectedSkill", skillName,
                             "skillName", skillName,
                             "paramName", inferredParam.name(),
-                            "paramValue", inferredParam.value()
+                            "paramValue", inferredParam.value(),
+                            "resolvedParams", params,
+                            "nextState", "CHECK_REQUIRED_PARAMS"
                     )
             ));
         });
@@ -986,10 +1049,15 @@ public class AgentRuntime {
             trace.add(AgentTrace.success(
                     AgentStep.INTENT_DETECTION,
                     "\u4ece\u81ea\u7136\u8bed\u8a00\u8865\u5168\u5355\u5b57\u7b26\u4e32\u53c2\u6570",
-                    Map.of(
+                    traceData(
+                            "decisionType", "PARAM_RESOLUTION",
+                            "decisionSource", "RULE",
+                            "selectedSkill", skillName,
                             "skillName", skillName,
                             "paramName", inferredParam.name(),
-                            "paramValue", inferredParam.value()
+                            "paramValue", inferredParam.value(),
+                            "resolvedParams", params,
+                            "nextState", "CHECK_REQUIRED_PARAMS"
                     )
             ));
         });
@@ -1013,11 +1081,17 @@ public class AgentRuntime {
                 AgentStep.CALL_SKILL,
                 result.isSuccess() ? AgentTraceStatus.SUCCESS : AgentTraceStatus.FAILED,
                 result.isSuccess() ? "调用 " + skillName + " Skill 成功" : "调用 " + skillName + " Skill 失败",
-                Map.of(
+                traceData(
+                        "actionType", "SKILL_CALL",
+                        "observationType", result.isSuccess() ? "SKILL_RESULT" : "SKILL_ERROR",
+                        "selectedSkill", skillName,
                         "skillName", skillName,
+                        "resolvedParams", params,
                         "params", params,
+                        "observationSummary", result.isSuccess() ? "Skill 调用成功" : "Skill 调用失败",
                         "result", result.getResult() == null ? "" : result.getResult(),
-                        "errorMessage", result.getErrorMessage() == null ? "" : result.getErrorMessage()
+                        "errorMessage", result.getErrorMessage() == null ? "" : result.getErrorMessage(),
+                        "nextState", "OBSERVE_RESULT"
                 ),
                 durationMs
         ));
@@ -1040,11 +1114,13 @@ public class AgentRuntime {
         trace.add(AgentTrace.success(
                 AgentStep.GENERATE_ANSWER,
                 "resume_optimize Skill 结果已直接作为最终回答",
-                Map.of(
+                traceData(
+                        "answerType", "DIRECT_SKILL_RESULT",
                         "skillName", skillName,
                         "modelId", modelId,
                         "skillSuccess", true,
-                        "directReturn", true
+                        "directReturn", true,
+                        "nextState", "SAVE_MEMORY"
                 )
         ));
 
@@ -1254,13 +1330,17 @@ public class AgentRuntime {
                     AgentStep.GENERATE_ANSWER,
                     AgentTraceStatus.SUCCESS,
                     "使用 Spring AI 根据 Skill 结果生成最终回答",
-                    Map.of(
+                    traceData(
+                            "answerType", "MODEL_SUMMARY",
                             "modelId", modelId,
+                            "selectedSkill", skillName,
                             "skillName", skillName,
+                            "resolvedParams", params,
                             "params", params,
                             "skillSuccess", skillResult.isSuccess(),
                             "shortTermMemoryCount", shortTermMessages.size(),
-                            "longTermMemoryCount", longTermMemories.size()
+                            "longTermMemoryCount", longTermMemories.size(),
+                            "nextState", "SAVE_MEMORY"
                     ),
                     modelDurationMs
             ));
@@ -1273,12 +1353,16 @@ public class AgentRuntime {
                     AgentStep.GENERATE_ANSWER,
                     AgentTraceStatus.FAILED,
                     "模型总结 SkillResult 失败",
-                    Map.of(
+                    traceData(
+                            "answerType", "MODEL_SUMMARY",
                             "modelId", modelId,
+                            "selectedSkill", skillName,
                             "skillName", skillName,
+                            "resolvedParams", params,
                             "params", params,
                             "skillSuccess", skillResult.isSuccess(),
-                            "errorMessage", exception.getMessage() == null ? "" : exception.getMessage()
+                            "errorMessage", exception.getMessage() == null ? "" : exception.getMessage(),
+                            "nextState", "FALLBACK_ANSWER"
                     ),
                     modelDurationMs
             ));
@@ -1394,10 +1478,15 @@ public class AgentRuntime {
         trace.add(AgentTrace.success(
                 AgentStep.SELECT_SKILL,
                 "根据 LLM 决策选择 Skill",
-                Map.of(
+                traceData(
+                        "decisionType", "SKILL_SELECTION",
+                        "decisionSource", "LLM",
+                        "selectedSkill", skillName,
                         "skillName", skillName,
+                        "resolvedParams", params,
                         "params", params,
-                        "reason", decision.getReason() == null ? "" : decision.getReason()
+                        "reason", decision.getReason() == null ? "" : decision.getReason(),
+                        "nextState", "CALL_SKILL"
                 )
         ));
 
@@ -1558,10 +1647,12 @@ public class AgentRuntime {
                     AgentStep.GENERATE_ANSWER,
                     AgentTraceStatus.SUCCESS,
                     "未调用 Skill，使用 Spring AI 生成普通回答",
-                    Map.of(
+                    traceData(
+                            "answerType", "MODEL_CHAT",
                             "modelId", modelId,
                             "shortTermMemoryCount", shortTermMessages.size(),
-                            "longTermMemoryCount", longTermMemories.size()
+                            "longTermMemoryCount", longTermMemories.size(),
+                            "nextState", "SAVE_MEMORY"
                     ),
                     modelDurationMs
             ));
@@ -1574,11 +1665,13 @@ public class AgentRuntime {
                     AgentStep.GENERATE_ANSWER,
                     AgentTraceStatus.FAILED,
                     "普通问题模型调用失败",
-                    Map.of(
+                    traceData(
+                            "answerType", "MODEL_CHAT",
                             "modelId", modelId,
                             "shortTermMemoryCount", shortTermMessages.size(),
                             "longTermMemoryCount", longTermMemories.size(),
-                            "errorMessage", exception.getMessage() == null ? "" : exception.getMessage()
+                            "errorMessage", exception.getMessage() == null ? "" : exception.getMessage(),
+                            "nextState", "FALLBACK_ANSWER"
                     ),
                     modelDurationMs
             ));

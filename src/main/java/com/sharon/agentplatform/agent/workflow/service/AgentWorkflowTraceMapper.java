@@ -118,14 +118,14 @@ public class AgentWorkflowTraceMapper {
         AgentDecision decision = new AgentDecision();
         decision.setDecisionOrder(decisionOrder);
         decision.setTraceStepOrder(trace.getStepOrder());
-        decision.setType(decisionType(trace.getStep()));
-        decision.setSource(decisionSource(trace.getStep(), trace.getDetail()));
+        decision.setType(firstNonBlank(data, "decisionType", decisionType(trace.getStep())));
+        decision.setSource(firstNonBlank(data, "decisionSource", decisionSource(trace.getStep(), trace.getDetail())));
         decision.setStatus(trace.getStatus());
         decision.setSummary(trace.getDetail());
         decision.setIntent(stringValue(data.get("intent")));
         decision.setNeedSkill(booleanValue(data.get("needSkill")));
-        decision.setSkillName(stringValue(data.get("skillName")));
-        decision.setParams(data.get("params"));
+        decision.setSkillName(firstNonBlank(data, "selectedSkill", stringValue(data.get("skillName"))));
+        decision.setParams(firstPresent(data, "resolvedParams", "params", "knownParams"));
         decision.setMissingParams(data.get("missingParams"));
         decision.setReason(stringValue(data.get("reason")));
         decision.setPendingStore(stringValue(data.get("pendingStore")));
@@ -139,17 +139,17 @@ public class AgentWorkflowTraceMapper {
     private AgentAction toAction(int actionOrder, AgentRunTraceEntity trace) {
         Map<String, Object> data = parseDataMap(trace.getDataJson());
         AgentObservation observation = new AgentObservation();
-        observation.setType("SKILL_RESULT");
-        observation.setData(data.get("result"));
+        observation.setType(firstNonBlank(data, "observationType", "SKILL_RESULT"));
+        observation.setData(firstPresent(data, "observation", "result"));
         observation.setErrorMessage(blankToNull(stringValue(data.get("errorMessage"))));
 
         AgentAction action = new AgentAction();
         action.setActionOrder(actionOrder);
         action.setTraceStepOrder(trace.getStepOrder());
-        action.setType(ACTION_TYPE_SKILL_CALL);
-        action.setName(stringValue(data.get("skillName")));
+        action.setType(firstNonBlank(data, "actionType", ACTION_TYPE_SKILL_CALL));
+        action.setName(firstNonBlank(data, "selectedSkill", stringValue(data.get("skillName"))));
         action.setStatus(trace.getStatus());
-        action.setInput(data.get("params"));
+        action.setInput(firstPresent(data, "resolvedParams", "params"));
         action.setObservation(observation);
         action.setDurationMs(trace.getDurationMs());
         action.setTraceTimestamp(trace.getTraceTimestamp());
@@ -423,5 +423,23 @@ public class AgentWorkflowTraceMapper {
 
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private String firstNonBlank(Map<String, Object> data, String key, String fallback) {
+        Object value = data.get(key);
+        if (value == null || value.toString().isBlank()) {
+            return fallback;
+        }
+        return value.toString();
+    }
+
+    private Object firstPresent(Map<String, Object> data, String... keys) {
+        for (String key : keys) {
+            Object value = data.get(key);
+            if (value != null) {
+                return value;
+            }
+        }
+        return null;
     }
 }

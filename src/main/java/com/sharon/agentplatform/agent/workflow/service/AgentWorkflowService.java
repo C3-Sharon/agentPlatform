@@ -1,185 +1,80 @@
 package com.sharon.agentplatform.agent.workflow.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.sharon.agentplatform.agent.history.entity.AgentRunEntity;
-import com.sharon.agentplatform.agent.history.entity.AgentRunTraceEntity;
-import com.sharon.agentplatform.agent.history.repository.AgentRunRepository;
-import com.sharon.agentplatform.agent.history.repository.AgentRunTraceRepository;
 import com.sharon.agentplatform.agent.workflow.dto.AgentWorkflowResponse;
 import com.sharon.agentplatform.agent.workflow.dto.AgentWorkflowStageResponse;
 import com.sharon.agentplatform.agent.workflow.dto.AgentWorkflowStepResponse;
-import com.sharon.agentplatform.common.exception.BusinessException;
+import com.sharon.agentplatform.agent.workflow.model.AgentWorkflowRun;
+import com.sharon.agentplatform.agent.workflow.model.AgentWorkflowStage;
+import com.sharon.agentplatform.agent.workflow.model.AgentWorkflowStep;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 @Service
 public class AgentWorkflowService {
 
-    private static final String STATUS_SUCCESS = "SUCCESS";
-    private static final String STATUS_FAILED = "FAILED";
+    private final AgentWorkflowModelService agentWorkflowModelService;
 
-    private final AgentRunRepository agentRunRepository;
-    private final AgentRunTraceRepository agentRunTraceRepository;
-    private final ObjectMapper objectMapper;
-
-    public AgentWorkflowService(AgentRunRepository agentRunRepository,
-                                AgentRunTraceRepository agentRunTraceRepository,
-                                ObjectMapper objectMapper) {
-        this.agentRunRepository = agentRunRepository;
-        this.agentRunTraceRepository = agentRunTraceRepository;
-        this.objectMapper = objectMapper;
+    public AgentWorkflowService(AgentWorkflowModelService agentWorkflowModelService) {
+        this.agentWorkflowModelService = agentWorkflowModelService;
     }
 
     public AgentWorkflowResponse getWorkflow(String runId) {
-        AgentRunEntity run = agentRunRepository.findByRunId(runId)
-                .orElseThrow(() -> new BusinessException("Agent run not found: " + runId));
-        List<AgentRunTraceEntity> traces = agentRunTraceRepository.findByRunIdOrderByStepOrderAsc(runId);
+        AgentWorkflowRun workflowRun = agentWorkflowModelService.getWorkflowRun(runId);
 
         AgentWorkflowResponse response = new AgentWorkflowResponse();
-        response.setRunId(run.getRunId());
-        response.setConversationId(run.getConversationId());
-        response.setModelId(run.getModelId());
-        response.setUserMessage(run.getUserMessage());
-        response.setAnswer(run.getAnswer());
-        response.setStatus(run.getStatus());
-        response.setErrorMessage(run.getErrorMessage());
-        response.setDurationMs(run.getDurationMs());
-        response.setCreatedAt(run.getCreatedAt());
-        response.setStages(buildStages(traces));
+        response.setRunId(workflowRun.getRunId());
+        response.setConversationId(workflowRun.getConversationId());
+        response.setModelId(workflowRun.getModelId());
+        response.setUserMessage(workflowRun.getUserMessage());
+        response.setAnswer(workflowRun.getAnswer());
+        response.setStatus(workflowRun.getStatus());
+        response.setErrorMessage(workflowRun.getErrorMessage());
+        response.setDurationMs(workflowRun.getDurationMs());
+        response.setCreatedAt(workflowRun.getCreatedAt());
+        response.setStages(toStageResponses(workflowRun.getStages()));
         return response;
     }
 
-    private List<AgentWorkflowStageResponse> buildStages(List<AgentRunTraceEntity> traces) {
-        Map<String, List<AgentWorkflowStepResponse>> grouped = new LinkedHashMap<>();
-        for (String stage : List.of("MEMORY", "INTENT", "DECISION", "ACTION", "ANSWER", "OTHER")) {
-            grouped.put(stage, new ArrayList<>());
+    private List<AgentWorkflowStageResponse> toStageResponses(List<AgentWorkflowStage> stages) {
+        List<AgentWorkflowStageResponse> responses = new ArrayList<>();
+        for (AgentWorkflowStage stage : safeStages(stages)) {
+            AgentWorkflowStageResponse response = new AgentWorkflowStageResponse();
+            response.setStage(stage.getStage());
+            response.setStatus(stage.getStatus());
+            response.setSummary(stage.getSummary());
+            response.setStartedAt(stage.getStartedAt());
+            response.setFinishedAt(stage.getFinishedAt());
+            response.setDurationMs(stage.getDurationMs());
+            response.setSteps(toStepResponses(stage.getSteps()));
+            responses.add(response);
         }
-
-        for (AgentRunTraceEntity trace : traces) {
-            grouped.get(classifyStage(trace.getStep())).add(toStepResponse(trace));
-        }
-
-        List<AgentWorkflowStageResponse> stages = new ArrayList<>();
-        for (Map.Entry<String, List<AgentWorkflowStepResponse>> entry : grouped.entrySet()) {
-            if (!entry.getValue().isEmpty()) {
-                stages.add(toStageResponse(entry.getKey(), entry.getValue()));
-            }
-        }
-        return stages;
+        return responses;
     }
 
-    private AgentWorkflowStageResponse toStageResponse(String stage, List<AgentWorkflowStepResponse> steps) {
-        AgentWorkflowStageResponse response = new AgentWorkflowStageResponse();
-        response.setStage(stage);
-        response.setStatus(stageStatus(steps));
-        response.setSummary(stageSummary(stage, steps));
-        response.setStartedAt(firstTime(steps));
-        response.setFinishedAt(lastTime(steps));
-        response.setDurationMs(totalDuration(steps));
-        response.setSteps(steps);
-        return response;
+    private List<AgentWorkflowStepResponse> toStepResponses(List<AgentWorkflowStep> steps) {
+        List<AgentWorkflowStepResponse> responses = new ArrayList<>();
+        for (AgentWorkflowStep step : safeSteps(steps)) {
+            AgentWorkflowStepResponse response = new AgentWorkflowStepResponse();
+            response.setStepOrder(step.getStepOrder());
+            response.setStep(step.getStep());
+            response.setStatus(step.getStatus());
+            response.setDetail(step.getDetail());
+            response.setData(step.getData());
+            response.setDurationMs(step.getDurationMs());
+            response.setTraceTimestamp(step.getTraceTimestamp());
+            response.setCreatedAt(step.getCreatedAt());
+            responses.add(response);
+        }
+        return responses;
     }
 
-    private AgentWorkflowStepResponse toStepResponse(AgentRunTraceEntity trace) {
-        AgentWorkflowStepResponse response = new AgentWorkflowStepResponse();
-        response.setStepOrder(trace.getStepOrder());
-        response.setStep(trace.getStep());
-        response.setStatus(trace.getStatus());
-        response.setDetail(trace.getDetail());
-        response.setData(parseData(trace.getDataJson()));
-        response.setDurationMs(trace.getDurationMs());
-        response.setTraceTimestamp(trace.getTraceTimestamp());
-        response.setCreatedAt(trace.getCreatedAt());
-        return response;
+    private List<AgentWorkflowStage> safeStages(List<AgentWorkflowStage> stages) {
+        return stages == null ? List.of() : stages;
     }
 
-    private String classifyStage(String step) {
-        if ("LOAD_MEMORY".equals(step) || "SAVE_MEMORY".equals(step)) {
-            return "MEMORY";
-        }
-        if ("INTENT_DETECTION".equals(step)) {
-            return "INTENT";
-        }
-        if ("SELECT_SKILL".equals(step) || "PARAM_RESOLUTION".equals(step)) {
-            return "DECISION";
-        }
-        if ("CALL_SKILL".equals(step)) {
-            return "ACTION";
-        }
-        if ("GENERATE_ANSWER".equals(step)) {
-            return "ANSWER";
-        }
-        return "OTHER";
-    }
-
-    private String stageStatus(List<AgentWorkflowStepResponse> steps) {
-        for (AgentWorkflowStepResponse step : steps) {
-            if (!STATUS_SUCCESS.equals(step.getStatus())) {
-                return STATUS_FAILED;
-            }
-        }
-        return STATUS_SUCCESS;
-    }
-
-    private String stageSummary(String stage, List<AgentWorkflowStepResponse> steps) {
-        return switch (stage) {
-            case "MEMORY" -> "加载或保存短期记忆和长期记忆";
-            case "INTENT" -> "识别用户意图和潜在 Skill 调用";
-            case "DECISION" -> "选择 Skill 并解析必要参数";
-            case "ACTION" -> "执行 Skill 或平台动作";
-            case "ANSWER" -> "生成面向用户的最终回答";
-            default -> "记录其他 AgentRuntime trace 步骤";
-        };
-    }
-
-    private LocalDateTime firstTime(List<AgentWorkflowStepResponse> steps) {
-        return steps.stream()
-                .map(this::stepTime)
-                .filter(time -> time != null)
-                .findFirst()
-                .orElse(null);
-    }
-
-    private LocalDateTime lastTime(List<AgentWorkflowStepResponse> steps) {
-        LocalDateTime last = null;
-        for (AgentWorkflowStepResponse step : steps) {
-            LocalDateTime time = stepTime(step);
-            if (time != null) {
-                last = time;
-            }
-        }
-        return last;
-    }
-
-    private LocalDateTime stepTime(AgentWorkflowStepResponse step) {
-        return step.getTraceTimestamp() == null ? step.getCreatedAt() : step.getTraceTimestamp();
-    }
-
-    private Long totalDuration(List<AgentWorkflowStepResponse> steps) {
-        long total = 0L;
-        boolean hasDuration = false;
-        for (AgentWorkflowStepResponse step : steps) {
-            if (step.getDurationMs() != null) {
-                total += step.getDurationMs();
-                hasDuration = true;
-            }
-        }
-        return hasDuration ? total : null;
-    }
-
-    private Object parseData(String json) {
-        if (json == null || json.isBlank()) {
-            return null;
-        }
-        try {
-            return objectMapper.readValue(json, Object.class);
-        } catch (Exception exception) {
-            return json;
-        }
+    private List<AgentWorkflowStep> safeSteps(List<AgentWorkflowStep> steps) {
+        return steps == null ? List.of() : steps;
     }
 }

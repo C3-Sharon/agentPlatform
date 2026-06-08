@@ -128,12 +128,12 @@ public class AgentWorkflowService {
 
     private String stageSummary(String stage, List<AgentWorkflowStepResponse> steps) {
         return switch (stage) {
-            case "MEMORY" -> "Loaded or saved short-term and long-term memory";
-            case "INTENT" -> "Detected user intent and potential Skill usage";
-            case "DECISION" -> "Selected Skill and resolved required parameters";
-            case "ACTION" -> "Executed selected Skill or platform action";
-            case "ANSWER" -> "Generated final response for the user";
-            default -> "Captured additional Agent runtime trace steps";
+            case "MEMORY" -> "加载或保存短期记忆和长期记忆";
+            case "INTENT" -> "识别用户意图和潜在 Skill 调用";
+            case "DECISION" -> "选择 Skill 并解析必要参数";
+            case "ACTION" -> "执行 Skill 或平台动作";
+            case "ANSWER" -> "生成面向用户的最终回答";
+            default -> "记录其他 AgentRuntime trace 步骤";
         };
     }
 

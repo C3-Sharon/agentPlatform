@@ -538,6 +538,7 @@
           </label>
           <div class="actions">
             <button onclick="getRunDetail()">获取 Run 详情</button>
+            <button class="secondary" onclick="getRunWorkflow()">获取 Run Workflow</button>
           </div>
         </div>
       </section>
@@ -956,6 +957,11 @@
     function getRunDetail() {
       const runId = encodeURIComponent(requireValue("runId", "runId"));
       return run("GET /api/agent/runs/" + runId, () => requestJson("GET", "/api/agent/runs/" + runId));
+    }
+
+    function getRunWorkflow() {
+      const runId = encodeURIComponent(requireValue("runId", "runId"));
+      return run("GET /api/agent/runs/" + runId + "/workflow", () => requestJson("GET", "/api/agent/runs/" + runId + "/workflow"));
     }
 
     function sendChat() {

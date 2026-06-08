@@ -3,10 +3,12 @@ package com.sharon.agentplatform.agent.workflow.controller;
 import com.sharon.agentplatform.agent.workflow.dto.AgentActionObservationResponse;
 import com.sharon.agentplatform.agent.workflow.dto.AgentDecisionViewResponse;
 import com.sharon.agentplatform.agent.workflow.dto.AgentRunExplanationResponse;
+import com.sharon.agentplatform.agent.workflow.dto.AgentRunReflectionResponse;
 import com.sharon.agentplatform.agent.workflow.dto.AgentWorkflowResponse;
 import com.sharon.agentplatform.agent.workflow.service.AgentActionObservationService;
 import com.sharon.agentplatform.agent.workflow.service.AgentDecisionService;
 import com.sharon.agentplatform.agent.workflow.service.AgentRunExplanationService;
+import com.sharon.agentplatform.agent.workflow.service.AgentRunReflectionService;
 import com.sharon.agentplatform.agent.workflow.service.AgentWorkflowService;
 import com.sharon.agentplatform.common.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,15 +24,18 @@ public class AgentWorkflowController {
     private final AgentActionObservationService agentActionObservationService;
     private final AgentDecisionService agentDecisionService;
     private final AgentRunExplanationService agentRunExplanationService;
+    private final AgentRunReflectionService agentRunReflectionService;
 
     public AgentWorkflowController(AgentWorkflowService agentWorkflowService,
                                    AgentActionObservationService agentActionObservationService,
                                    AgentDecisionService agentDecisionService,
-                                   AgentRunExplanationService agentRunExplanationService) {
+                                   AgentRunExplanationService agentRunExplanationService,
+                                   AgentRunReflectionService agentRunReflectionService) {
         this.agentWorkflowService = agentWorkflowService;
         this.agentActionObservationService = agentActionObservationService;
         this.agentDecisionService = agentDecisionService;
         this.agentRunExplanationService = agentRunExplanationService;
+        this.agentRunReflectionService = agentRunReflectionService;
     }
 
     @GetMapping("/{runId}/workflow")
@@ -51,5 +56,10 @@ public class AgentWorkflowController {
     @GetMapping("/{runId}/explain")
     public ApiResponse<AgentRunExplanationResponse> explain(@PathVariable String runId) {
         return ApiResponse.success(agentRunExplanationService.explain(runId));
+    }
+
+    @GetMapping("/{runId}/reflection")
+    public ApiResponse<AgentRunReflectionResponse> reflect(@PathVariable String runId) {
+        return ApiResponse.success(agentRunReflectionService.reflect(runId));
     }
 }

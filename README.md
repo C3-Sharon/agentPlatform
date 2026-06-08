@@ -19,7 +19,7 @@
 - Vision Chat 多模态图片输入 MVP
 - 短期记忆 MySQL 持久化与长期记忆文件持久化
 - Agent Run History 与 trace 持久化
-- Agent Workflow / Decision / Action / Explanation / Reflection 可观测视图
+- Agent Workflow / Plan / Decision / Action / Timeline / Explanation / Reflection 可观测视图
 - Skill Registry 与统一 Skill 启用/禁用
 - Plugin Skill Market：Jar 上传、热加载、持久化、启用/禁用、启动恢复
 - PluginSkillValidator 插件安装校验
@@ -56,7 +56,7 @@
 | 3 个不同方向 Skill 演示 | `calculator`、`weather`、`file_search`、`resume_optimize`、`text_reverse`、`text_insight`、`mcp_echo_client` 等 | 已完成     |
 | 简单管理界面 | 静态 Web Console + PowerShell CLI scripts | 已完成     |
 | 系统自检 | `GET /api/system/health-check` 聚合模型、Skill、插件 runtime、MCP、Memory、Console 状态 | 已完成     |
-| Agent 可观测性 | Run Detail / Workflow / Decision / Action / Explanation / Reflection 多层只读视图 | MVP 已完成 |
+| Agent 可观测性 | Run Detail / Workflow / Plan / Decision / Action / Timeline / Explanation / Reflection 多层只读视图 | MVP 已完成 |
 
 > 说明：本项目当前没有实现完整标准 MCP transport。相关内容放在“当前限制”和“未来规划”中
 
@@ -277,6 +277,8 @@ Vision Chat MVP：
 - `GET /api/agent/runs`
 - `GET /api/agent/runs/{runId}`
 - `GET /api/agent/runs/{runId}/workflow`
+- `GET /api/agent/runs/{runId}/plan`
+- `GET /api/agent/runs/{runId}/timeline`
 - `GET /api/agent/runs/{runId}/decisions`
 - `GET /api/agent/runs/{runId}/actions`
 - `GET /api/agent/runs/{runId}/explain`
@@ -286,6 +288,8 @@ Vision Chat MVP：
 
 - Run Detail：原始运行详情和 trace
 - Workflow View：按 `MEMORY` / `INTENT` / `DECISION` / `ACTION` / `ANSWER` 归纳运行阶段
+- Plan View：基于实际 trace 推导本次运行计划，标记 `COMPLETED` / `FAILED` / `WAITING_FOR_USER` / `SKIPPED`
+- Timeline View：聚合 Plan、Stage、Trace Step、Decision、Action、Observation、Reflection，按统一列表展示完整运行链路
 - Decision View：整理意图识别、Skill 选择、参数解析、pending 追问等决策信息
 - Action / Observation View：整理 Agent 实际执行的 Skill 调用、输入参数、返回结果和错误信息
 - Explanation View：基于已有视图生成稳定中文摘要、亮点和风险提示，不额外调用 LLM
@@ -1193,6 +1197,8 @@ POST /api/memory/{conversationId}/long-term
 GET /api/agent/runs
 GET /api/agent/runs/{runId}
 GET /api/agent/runs/{runId}/workflow
+GET /api/agent/runs/{runId}/plan
+GET /api/agent/runs/{runId}/timeline
 GET /api/agent/runs/{runId}/decisions
 GET /api/agent/runs/{runId}/actions
 GET /api/agent/runs/{runId}/explain
@@ -1308,7 +1314,7 @@ CLI 脚本在部分 Windows 控制台里可能出现中文编码问题。建议�
 - Vision Chat 不支持音频/视频
 - Web Console 是静态控制台，不是完整前端系统
 - Agent Team 尚未实现
-- Agent Workflow / Decision / Action / Explanation / Reflection 当前是基于 Run History 与 Trace 的只读可观测视图，还不是新的 Agent 执行引擎
+- Agent Workflow / Plan / Decision / Action / Timeline / Explanation / Reflection 当前是基于 Run History 与 Trace 的只读可观测视图，还不是新的 Agent 执行引擎
 - Redis 已作为可选 `PendingSkillCallStore` 接入，只用于追问临时状态，不迁移 Memory、Run History 或异步任务
 - 向量库 / RAG 尚未实现
 - `resume_optimize` 仍是内置复杂 Skill，未拆成外部 Jar
@@ -1322,7 +1328,7 @@ CLI 脚本在部分 Windows 控制台里可能出现中文编码问题。建议�
 - 向量库长期记忆与 RAG
 - 完整 MCP stdio / SSE / Streamable HTTP transport
 - 更完整的 MCP initialize / capabilities / resources / prompts 对齐
-- AgentRuntime Workflow 标准化：已具备只读 Workflow / Decision / Action / Explanation / Reflection 视图，后续继续演进 Plan 与一等结构化 Action / Observation / Reflection 模型
+- AgentRuntime Workflow 标准化：已具备只读 Workflow / Plan / Decision / Action / Timeline / Explanation / Reflection 视图，后续继续演进一等结构化 Action / Observation / Reflection 持久化模型
 - PluginContext / SPI：向插件暴露受控的 ModelClient、McpToolClient、ResourceClient、ConfigClient
 - 插件版本升级、回滚与物理卸载
 - 插件依赖隔离与冲突治理

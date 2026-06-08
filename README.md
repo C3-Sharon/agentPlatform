@@ -19,6 +19,7 @@
 - Vision Chat 多模态图片输入 MVP
 - 短期记忆 MySQL 持久化与长期记忆文件持久化
 - Agent Run History 与 trace 持久化
+- Agent Workflow / Decision / Action / Explanation 可观测视图
 - Skill Registry 与统一 Skill 启用/禁用
 - Plugin Skill Market：Jar 上传、热加载、持久化、启用/禁用、启动恢复
 - PluginSkillValidator 插件安装校验
@@ -28,7 +29,7 @@
 - PluginRuntimeRegistry 插件运行时与 URLClassLoader 生命周期管理
 - PluginContext / SPI：向插件 Skill 注入受控上下文，提供插件日志、权限检查和内部 MCP Client
 - MCP Tool Registry、REST MCP 接口、JSON-RPC Adapter
-- External MCP HTTP Client：注册、同步和调用外部 MCP Server 工具
+- External MCP HTTP Client：注册、健康检查、同步诊断和调用外部 MCP Server 工具
 - Web 控制台与 PowerShell CLI 控制台
 - System Health Check 系统自检
 - 简历优化同步/异步任务与追问式调用
@@ -55,6 +56,7 @@
 | 3 个不同方向 Skill 演示 | `calculator`、`weather`、`file_search`、`resume_optimize`、`text_reverse`、`text_insight`、`mcp_echo_client` 等 | 已完成     |
 | 简单管理界面 | 静态 Web Console + PowerShell CLI scripts | 已完成     |
 | 系统自检 | `GET /api/system/health-check` 聚合模型、Skill、插件 runtime、MCP、Memory、Console 状态 | 已完成     |
+| Agent 可观测性 | Run Detail / Workflow / Decision / Action / Explanation 多层只读视图 | MVP 已完成 |
 
 > 说明：本项目当前没有实现完整标准 MCP transport。相关内容放在“当前限制”和“未来规划”中
 
@@ -274,6 +276,18 @@ Vision Chat MVP：
 
 - `GET /api/agent/runs`
 - `GET /api/agent/runs/{runId}`
+- `GET /api/agent/runs/{runId}/workflow`
+- `GET /api/agent/runs/{runId}/decisions`
+- `GET /api/agent/runs/{runId}/actions`
+- `GET /api/agent/runs/{runId}/explain`
+
+可观测视图：
+
+- Run Detail：原始运行详情和 trace
+- Workflow View：按 `MEMORY` / `INTENT` / `DECISION` / `ACTION` / `ANSWER` 归纳运行阶段
+- Decision View：整理意图识别、Skill 选择、参数解析、pending 追问等决策信息
+- Action / Observation View：整理 Agent 实际执行的 Skill 调用、输入参数、返回结果和错误信息
+- Explanation View：基于已有视图生成稳定中文摘要、亮点和风险提示，不额外调用 LLM
 
 区别：
 
@@ -437,6 +451,7 @@ REST 接口：
 - `tools/list`
 - `tools/call`
 - `resources/list`
+- `resources/templates/list`
 - `resources/read`
 - `prompts/list`
 - `prompts/get`
@@ -470,7 +485,9 @@ REST 接口：
 功能：
 
 - 注册外部 HTTP JSON-RPC MCP Server
+- 实时健康检查外部 MCP Server，探测 `initialize` / `ping` / `tools/list`
 - 调用外部 server 的 `tools/list` 同步工具
+- 同步工具时返回 health、warnings、syncedToolNames 和分阶段 checks
 - 保存外部工具记录
 - 调用外部 server 的 `tools/call`
 
@@ -479,6 +496,7 @@ REST 接口：
 - `POST /api/mcp/external/servers`
 - `GET /api/mcp/external/servers`
 - `GET /api/mcp/external/servers/{serverId}`
+- `POST /api/mcp/external/servers/{serverId}/health-check`
 - `POST /api/mcp/external/servers/{serverId}/sync-tools`
 - `POST /api/mcp/external/tools/{toolId}/call`
 
@@ -488,8 +506,9 @@ REST 接口：
 - 不支持 stdio transport
 - 不支持 SSE / Streamable HTTP
 - 已支持 `initialize` / `ping` MVP，但不是完整 MCP 生命周期和 capabilities 协议
-- 已支持 `resources/list` / `resources/read` MVP，但当前只暴露平台内置只读资源
+- 已支持 `resources/list` / `resources/templates/list` / `resources/read` MVP，但当前只暴露平台内置只读资源
 - 已支持 `prompts/list` / `prompts/get` MVP，但当前是静态提示模板，不改变 AgentRuntime 真实提示词
+- External MCP 已支持健康检查和同步诊断，但不等同于完整外部 MCP 生命周期管理
 - 不管理外部 MCP Server 进程生命周期
 - 不支持 OAuth
 
@@ -1158,6 +1177,7 @@ POST /api/mcp/rpc
 POST /api/mcp/external/servers
 GET /api/mcp/external/servers
 GET /api/mcp/external/servers/{serverId}
+POST /api/mcp/external/servers/{serverId}/health-check
 POST /api/mcp/external/servers/{serverId}/sync-tools
 POST /api/mcp/external/tools/{toolId}/call
 ```
@@ -1170,6 +1190,10 @@ GET /api/memory/conversations/{conversationId}/messages
 POST /api/memory/{conversationId}/long-term
 GET /api/agent/runs
 GET /api/agent/runs/{runId}
+GET /api/agent/runs/{runId}/workflow
+GET /api/agent/runs/{runId}/decisions
+GET /api/agent/runs/{runId}/actions
+GET /api/agent/runs/{runId}/explain
 ```
 
 ### 12.8 System Status
@@ -1269,7 +1293,7 @@ CLI 脚本在部分 Windows 控制台里可能出现中文编码问题。建议�
 - MCP 是 HTTP JSON-RPC 风格 MVP，不是完整标准 MCP transport
 - 不支持 stdio、SSE / Streamable HTTP、OAuth
 - 已支持 MCP `initialize` / `ping` MVP，但不是完整 MCP 生命周期和 capabilities 协议
-- 已支持 MCP `resources/list` / `resources/read` MVP，但当前只读平台内置资源
+- 已支持 MCP `resources/list` / `resources/templates/list` / `resources/read` MVP，但当前只读平台内置资源
 - 已支持 MCP `prompts/list` / `prompts/get` MVP，但当前仅暴露静态提示模板
 - External MCP 不管理外部 server 进程生命周期
 - 插件 Skill 不支持 Spring Bean 注入
@@ -1281,7 +1305,7 @@ CLI 脚本在部分 Windows 控制台里可能出现中文编码问题。建议�
 - Vision Chat 不支持音频/视频
 - Web Console 是静态控制台，不是完整前端系统
 - Agent Team 尚未实现
-- Redis 暂未接入
+- Redis 已作为可选 `PendingSkillCallStore` 接入，只用于追问临时状态，不迁移 Memory、Run History 或异步任务
 - 向量库 / RAG 尚未实现
 - `resume_optimize` 仍是内置复杂 Skill，未拆成外部 Jar
 - 异步简历优化使用内存线程池，服务重启后 `RUNNING` 任务不会自动恢复
@@ -1290,10 +1314,11 @@ CLI 脚本在部分 Windows 控制台里可能出现中文编码问题。建议�
 ## 15. 未来规划
 
 - Agent Team：Planner / Executor / Reviewer 多 Agent 协作
-- Redis 版 `PendingSkillCallStore`
+- Redis pending 状态可继续扩展为更完整的分布式会话状态治理
 - 向量库长期记忆与 RAG
 - 完整 MCP stdio / SSE / Streamable HTTP transport
-- 标准 MCP initialize / capabilities
+- 更完整的 MCP initialize / capabilities / resources / prompts 对齐
+- AgentRuntime Workflow 标准化：继续演进 Reflection、Plan、Action、Observation 等结构
 - PluginContext / SPI：向插件暴露受控的 ModelClient、McpToolClient、ResourceClient、ConfigClient
 - 插件版本升级、回滚与物理卸载
 - 插件依赖隔离与冲突治理

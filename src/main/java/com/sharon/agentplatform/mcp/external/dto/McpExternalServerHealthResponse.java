@@ -24,6 +24,7 @@ public class McpExternalServerHealthResponse {
     private String toolsListError;
     private Integer toolCount;
     private List<String> toolNames;
+    private List<McpExternalCheckStepResponse> checks;
     private Map<String, Object> rawInitializeResult;
     private Map<String, Object> rawPingResult;
 
@@ -65,6 +66,8 @@ public class McpExternalServerHealthResponse {
     public void setToolCount(Integer toolCount) { this.toolCount = toolCount; }
     public List<String> getToolNames() { return toolNames; }
     public void setToolNames(List<String> toolNames) { this.toolNames = toolNames; }
+    public List<McpExternalCheckStepResponse> getChecks() { return checks; }
+    public void setChecks(List<McpExternalCheckStepResponse> checks) { this.checks = checks; }
     public Map<String, Object> getRawInitializeResult() { return rawInitializeResult; }
     public void setRawInitializeResult(Map<String, Object> rawInitializeResult) { this.rawInitializeResult = rawInitializeResult; }
     public Map<String, Object> getRawPingResult() { return rawPingResult; }

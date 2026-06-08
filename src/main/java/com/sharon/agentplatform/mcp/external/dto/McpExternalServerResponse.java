@@ -14,6 +14,10 @@ public class McpExternalServerResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<McpExternalToolResponse> tools;
+    private McpExternalServerHealthResponse health;
+    private List<String> warnings;
+    private Integer syncedToolCount;
+    private List<String> syncedToolNames;
     public String getServerId() { return serverId; }
     public void setServerId(String serverId) { this.serverId = serverId; }
     public String getName() { return name; }
@@ -34,4 +38,12 @@ public class McpExternalServerResponse {
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     public List<McpExternalToolResponse> getTools() { return tools; }
     public void setTools(List<McpExternalToolResponse> tools) { this.tools = tools; }
+    public McpExternalServerHealthResponse getHealth() { return health; }
+    public void setHealth(McpExternalServerHealthResponse health) { this.health = health; }
+    public List<String> getWarnings() { return warnings; }
+    public void setWarnings(List<String> warnings) { this.warnings = warnings; }
+    public Integer getSyncedToolCount() { return syncedToolCount; }
+    public void setSyncedToolCount(Integer syncedToolCount) { this.syncedToolCount = syncedToolCount; }
+    public List<String> getSyncedToolNames() { return syncedToolNames; }
+    public void setSyncedToolNames(List<String> syncedToolNames) { this.syncedToolNames = syncedToolNames; }
 }

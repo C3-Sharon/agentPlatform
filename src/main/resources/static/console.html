@@ -540,6 +540,7 @@
             <button onclick="getRunDetail()">获取 Run 详情</button>
             <button class="secondary" onclick="getRunPlan()">获取 Run Plan</button>
             <button class="secondary" onclick="getRunTimeline()">获取 Run Timeline</button>
+            <button class="secondary" onclick="debugRun()">获取 Run Debug</button>
             <button class="secondary" onclick="explainRun()">获取 Run Explain</button>
             <button class="secondary" onclick="reflectRun()">获取 Run Reflection</button>
             <button class="secondary" onclick="getRunWorkflow()">获取 Run Workflow</button>
@@ -973,6 +974,11 @@
     function getRunTimeline() {
       const runId = encodeURIComponent(requireValue("runId", "runId"));
       return run("GET /api/agent/runs/" + runId + "/timeline", () => requestJson("GET", "/api/agent/runs/" + runId + "/timeline"));
+    }
+
+    function debugRun() {
+      const runId = encodeURIComponent(requireValue("runId", "runId"));
+      return run("GET /api/agent/runs/" + runId + "/debug", () => requestJson("GET", "/api/agent/runs/" + runId + "/debug"));
     }
 
     function explainRun() {

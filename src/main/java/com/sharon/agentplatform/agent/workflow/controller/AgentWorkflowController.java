@@ -2,6 +2,7 @@ package com.sharon.agentplatform.agent.workflow.controller;
 
 import com.sharon.agentplatform.agent.workflow.dto.AgentActionObservationResponse;
 import com.sharon.agentplatform.agent.workflow.dto.AgentDecisionViewResponse;
+import com.sharon.agentplatform.agent.workflow.dto.AgentRunDebugResponse;
 import com.sharon.agentplatform.agent.workflow.dto.AgentRunExplanationResponse;
 import com.sharon.agentplatform.agent.workflow.dto.AgentRunPlanResponse;
 import com.sharon.agentplatform.agent.workflow.dto.AgentRunReflectionResponse;
@@ -9,6 +10,7 @@ import com.sharon.agentplatform.agent.workflow.dto.AgentRunTimelineResponse;
 import com.sharon.agentplatform.agent.workflow.dto.AgentWorkflowResponse;
 import com.sharon.agentplatform.agent.workflow.service.AgentActionObservationService;
 import com.sharon.agentplatform.agent.workflow.service.AgentDecisionService;
+import com.sharon.agentplatform.agent.workflow.service.AgentRunDebugService;
 import com.sharon.agentplatform.agent.workflow.service.AgentRunExplanationService;
 import com.sharon.agentplatform.agent.workflow.service.AgentRunPlanService;
 import com.sharon.agentplatform.agent.workflow.service.AgentRunReflectionService;
@@ -31,6 +33,7 @@ public class AgentWorkflowController {
     private final AgentRunReflectionService agentRunReflectionService;
     private final AgentRunPlanService agentRunPlanService;
     private final AgentRunTimelineService agentRunTimelineService;
+    private final AgentRunDebugService agentRunDebugService;
 
     public AgentWorkflowController(AgentWorkflowService agentWorkflowService,
                                    AgentActionObservationService agentActionObservationService,
@@ -38,7 +41,8 @@ public class AgentWorkflowController {
                                    AgentRunExplanationService agentRunExplanationService,
                                    AgentRunReflectionService agentRunReflectionService,
                                    AgentRunPlanService agentRunPlanService,
-                                   AgentRunTimelineService agentRunTimelineService) {
+                                   AgentRunTimelineService agentRunTimelineService,
+                                   AgentRunDebugService agentRunDebugService) {
         this.agentWorkflowService = agentWorkflowService;
         this.agentActionObservationService = agentActionObservationService;
         this.agentDecisionService = agentDecisionService;
@@ -46,6 +50,7 @@ public class AgentWorkflowController {
         this.agentRunReflectionService = agentRunReflectionService;
         this.agentRunPlanService = agentRunPlanService;
         this.agentRunTimelineService = agentRunTimelineService;
+        this.agentRunDebugService = agentRunDebugService;
     }
 
     @GetMapping("/{runId}/workflow")
@@ -81,5 +86,10 @@ public class AgentWorkflowController {
     @GetMapping("/{runId}/timeline")
     public ApiResponse<AgentRunTimelineResponse> getTimeline(@PathVariable String runId) {
         return ApiResponse.success(agentRunTimelineService.getTimeline(runId));
+    }
+
+    @GetMapping("/{runId}/debug")
+    public ApiResponse<AgentRunDebugResponse> debug(@PathVariable String runId) {
+        return ApiResponse.success(agentRunDebugService.debug(runId));
     }
 }
